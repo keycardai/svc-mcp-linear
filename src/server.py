@@ -30,6 +30,7 @@ def create_mcp_server() -> FastMCP:
     """
     mcp = FastMCP(
         "Linear MCP Server",
+        stateless_http=True,  # Required for Render/serverless - each request is independent
         instructions="""Linear MCP Server for managing issues and workflow states.
 
 This server provides tools to:
