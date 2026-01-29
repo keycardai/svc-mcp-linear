@@ -85,7 +85,7 @@ async def execute_query(
         token = get_bearer_token()
 
     headers = {
-        "Authorization": token,
+        "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
 

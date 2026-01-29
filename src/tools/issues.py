@@ -1,6 +1,6 @@
-"""Issue Query Tools.
+"""Query Tools.
 
-Tools for reading Linear issues: my_issues, issue, search.
+Tools for reading Linear data: my_issues, issue, search, list_projects.
 """
 
 from __future__ import annotations
@@ -62,6 +62,44 @@ query($query: String!) {
             state { name }
             priority
             project { name }
+        }
+    }
+}
+"""
+
+LIST_PROJECTS_QUERY = """
+query {
+    projects(first: 50) {
+        nodes {
+            id
+            name
+            slugId
+            state
+            teams {
+                nodes {
+                    id
+                    name
+                }
+            }
+        }
+    }
+}
+"""
+
+LIST_PROJECTS_BY_TEAM_QUERY = """
+query($teamId: String!) {
+    projects(filter: { accessibleTeams: { id: { eq: $teamId } } }, first: 50) {
+        nodes {
+            id
+            name
+            slugId
+            state
+            teams {
+                nodes {
+                    id
+                    name
+                }
+            }
         }
     }
 }
@@ -130,6 +168,30 @@ def register_issue_tools(mcp: FastMCP) -> None:
                 "issues": issues,
                 "count": len(issues),
             }
+        except LinearClientError as e:
+            return {"success": False, "error": e.message, "isError": True}
+        except ValueError as e:
+            return {"success": False, "error": str(e), "isError": True}
+
+    @mcp.tool(
+        name="list_projects",
+        description="List Linear projects, optionally filtered by team. Returns project id, name, state, and associated teams.",
+    )
+    async def list_projects(team_id: str | None = None) -> dict:
+        """List Linear projects.
+
+        Args:
+            team_id: Optional team UUID to filter projects by.
+        """
+        try:
+            if team_id:
+                data = await execute_query(
+                    LIST_PROJECTS_BY_TEAM_QUERY, {"teamId": team_id}
+                )
+            else:
+                data = await execute_query(LIST_PROJECTS_QUERY)
+            projects = data.get("projects", {}).get("nodes", [])
+            return {"success": True, "projects": projects, "count": len(projects)}
         except LinearClientError as e:
             return {"success": False, "error": e.message, "isError": True}
         except ValueError as e:

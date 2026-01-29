@@ -1,6 +1,6 @@
 # svc-mcp-linear
 
-Linear MCP Server for Cloudflare Workers.
+Linear MCP Server.
 
 This is a "dumb" MCP server that receives pre-exchanged tokens from an MCP Gateway. It does not handle authentication itself - the gateway handles OAuth and token exchange.
 
@@ -27,9 +27,11 @@ The gateway exchanges tokens and passes the Linear API token in the `Authorizati
 | `my_issues` | Query | Get issues assigned to authenticated user |
 | `issue` | Query | Get details of a specific issue by identifier (e.g., ENG-123) |
 | `search` | Query | Search issues by text query (searches title and description) |
-| `create_issue` | Mutation | Create a new issue (requires team_id and title) |
+| `list_projects` | Query | List projects, optionally filtered by team |
+| `create_issue` | Mutation | Create a new issue (requires team_id and title, optional project_id) |
 | `update_issue` | Mutation | Update issue fields (title, description, priority, etc.) |
 | `update_status` | Mutation | Change issue workflow state |
+| `create_project` | Mutation | Create a new project (requires name and team_id) |
 | `states` | Query | List available workflow states for a team |
 
 ### Tool Details
@@ -87,6 +89,33 @@ Search issues by text query.
 **Parameters:**
 - `query` (required): Search text (case-insensitive, searches title and description)
 
+#### `list_projects`
+List Linear projects.
+
+**Parameters:**
+- `team_id` (optional): Team UUID to filter projects by
+
+**Response:**
+```json
+{
+  "success": true,
+  "projects": [
+    {
+      "id": "project-uuid",
+      "name": "Backend Refactor",
+      "slugId": "backend-refactor",
+      "state": "started",
+      "teams": {
+        "nodes": [
+          { "id": "team-uuid", "name": "Engineering" }
+        ]
+      }
+    }
+  ],
+  "count": 1
+}
+```
+
 #### `create_issue`
 Create a new issue.
 
@@ -97,6 +126,7 @@ Create a new issue.
 - `priority` (optional): 0=none, 1=urgent, 2=high, 3=medium, 4=low
 - `state_id` (optional): Initial workflow state UUID
 - `assignee_id` (optional): Assignee user UUID
+- `project_id` (optional): Project UUID to assign issue to (get from `list_projects`)
 
 #### `update_issue`
 Update an existing issue.
@@ -115,6 +145,28 @@ Change issue workflow state.
 **Parameters:**
 - `issue_id` (required): Issue UUID
 - `state_id` (required): Target workflow state UUID (get from `states` tool)
+
+#### `create_project`
+Create a new Linear project.
+
+**Parameters:**
+- `name` (required): Project name
+- `team_id` (required): Team UUID to associate with project
+- `description` (optional): Project description
+- `state` (optional): Project state (planned, started, paused, completed, canceled)
+
+**Response:**
+```json
+{
+  "success": true,
+  "project": {
+    "id": "project-uuid",
+    "name": "New Project",
+    "slugId": "new-project",
+    "url": "https://linear.app/team/project/new-project"
+  }
+}
+```
 
 #### `states`
 Get available workflow states.
@@ -203,19 +255,24 @@ With coverage:
 uv run pytest --cov=src --cov-report=term-missing
 ```
 
-## Cloudflare Deployment
+## Render Deployment
 
-> Note: Cloudflare deployment is out of scope for initial implementation. The `wrangler.toml` is provided for future deployment.
+The server is deployed on Render at `https://svc-mcp-linear.onrender.com/mcp`.
+
+### Configuration
+
+The server uses `stateless_http=True` for compatibility with Render's infrastructure (handles restarts and scaling without session state issues).
+
+### Deploy
+
+1. Connect your repo to Render
+2. Set the start command: `uv run python -m src.server`
+3. Set environment variable `PORT` (Render provides this automatically)
+
+### Manual Deploy
 
 ```bash
-# Install pywrangler (when ready for deployment)
-pip install pywrangler
-
-# Deploy
-pywrangler deploy
-
-# Set secrets
-wrangler secret put LINEAR_API_TOKEN
+git push origin main  # Auto-deploys if connected to Render
 ```
 
 ## Error Handling
@@ -264,7 +321,7 @@ svc-mcp-linear/
 │   ├── test_client.py
 │   └── test_tools.py
 ├── pyproject.toml
-├── wrangler.toml
+├── wrangler.toml        # Legacy - for future Cloudflare Workers support
 ├── .env.example
 └── README.md
 ```

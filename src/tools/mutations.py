@@ -1,6 +1,6 @@
-"""Issue Mutation Tools.
+"""Mutation Tools.
 
-Tools for modifying Linear issues: create_issue, update_issue, update_status.
+Tools for modifying Linear: create_issue, update_issue, update_status, create_project.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from ..client import LinearClientError, execute_query
 
 # GraphQL Mutations
 CREATE_ISSUE_MUTATION = """
-mutation($teamId: String!, $title: String!, $description: String, $priority: Int, $stateId: String, $assigneeId: String) {
+mutation($teamId: String!, $title: String!, $description: String, $priority: Int, $stateId: String, $assigneeId: String, $projectId: String) {
     issueCreate(input: {
         teamId: $teamId
         title: $title
@@ -19,6 +19,7 @@ mutation($teamId: String!, $title: String!, $description: String, $priority: Int
         priority: $priority
         stateId: $stateId
         assigneeId: $assigneeId
+        projectId: $projectId
     }) {
         success
         issue {
@@ -28,6 +29,7 @@ mutation($teamId: String!, $title: String!, $description: String, $priority: Int
             url
             state { name }
             assignee { name }
+            project { id name }
         }
     }
 }
@@ -68,13 +70,32 @@ mutation($id: String!, $stateId: String!) {
 }
 """
 
+CREATE_PROJECT_MUTATION = """
+mutation($name: String!, $teamIds: [String!]!, $description: String, $state: String) {
+    projectCreate(input: {
+        name: $name
+        teamIds: $teamIds
+        description: $description
+        state: $state
+    }) {
+        success
+        project {
+            id
+            name
+            slugId
+            url
+        }
+    }
+}
+"""
+
 
 def register_mutation_tools(mcp: FastMCP) -> None:
     """Register issue mutation tools with the MCP server."""
 
     @mcp.tool(
         name="create_issue",
-        description="Create a new Linear issue. Requires team_id and title. Optional: description, priority (0=none, 1=urgent, 2=high, 3=medium, 4=low), state_id, assignee_id.",
+        description="Create a new Linear issue. Requires team_id and title. Optional: description, priority (0=none, 1=urgent, 2=high, 3=medium, 4=low), state_id, assignee_id, project_id.",
     )
     async def create_issue(
         team_id: str,
@@ -83,6 +104,7 @@ def register_mutation_tools(mcp: FastMCP) -> None:
         priority: int | None = None,
         state_id: str | None = None,
         assignee_id: str | None = None,
+        project_id: str | None = None,
     ) -> dict:
         """Create a new Linear issue.
 
@@ -93,6 +115,7 @@ def register_mutation_tools(mcp: FastMCP) -> None:
             priority: Optional priority (0=none, 1=urgent, 2=high, 3=medium, 4=low).
             state_id: Optional workflow state ID (get from states tool).
             assignee_id: Optional assignee user ID.
+            project_id: Optional project ID to assign issue to (get from list_projects tool).
         """
         try:
             variables = {
@@ -102,6 +125,7 @@ def register_mutation_tools(mcp: FastMCP) -> None:
                 "priority": priority,
                 "stateId": state_id,
                 "assigneeId": assignee_id,
+                "projectId": project_id,
             }
             data = await execute_query(CREATE_ISSUE_MUTATION, variables)
             result = data.get("issueCreate", {})
@@ -173,6 +197,41 @@ def register_mutation_tools(mcp: FastMCP) -> None:
             if result.get("success"):
                 return {"success": True, "issue": result.get("issue")}
             return {"success": False, "error": "Status update failed", "isError": True}
+        except LinearClientError as e:
+            return {"success": False, "error": e.message, "isError": True}
+        except ValueError as e:
+            return {"success": False, "error": str(e), "isError": True}
+
+    @mcp.tool(
+        name="create_project",
+        description="Create a new Linear project. Requires name and team_id. Optional: description, state (planned, started, paused, completed, canceled).",
+    )
+    async def create_project(
+        name: str,
+        team_id: str,
+        description: str | None = None,
+        state: str | None = None,
+    ) -> dict:
+        """Create a new Linear project.
+
+        Args:
+            name: Project name (required).
+            team_id: Team UUID to associate with project (required).
+            description: Optional project description.
+            state: Optional project state (planned, started, paused, completed, canceled).
+        """
+        try:
+            variables = {
+                "name": name,
+                "teamIds": [team_id],  # API expects array
+                "description": description,
+                "state": state,
+            }
+            data = await execute_query(CREATE_PROJECT_MUTATION, variables)
+            result = data.get("projectCreate", {})
+            if result.get("success"):
+                return {"success": True, "project": result.get("project")}
+            return {"success": False, "error": "Project creation failed", "isError": True}
         except LinearClientError as e:
             return {"success": False, "error": e.message, "isError": True}
         except ValueError as e:
