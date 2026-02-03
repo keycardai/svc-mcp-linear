@@ -4,6 +4,5 @@ services:
     runtime: python
     buildCommand: pip install uv && uv sync
     startCommand: uv run python -m src.server
-    healthCheckPath: /health
     autoDeploy: true
     region: oregon
