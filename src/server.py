@@ -30,6 +30,7 @@ def create_mcp_server() -> FastMCP:
     """
     mcp = FastMCP(
         "Linear MCP Server",
+        stateless_http=True,  # Enable stateless mode for gateway proxy
         instructions="""Linear MCP Server for managing issues and workflow states.
 
 This server provides tools to:
