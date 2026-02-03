@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
     # Get the ASGI app and add health route manually
     # (FastMCP's @custom_route decorator has bugs in 2.14.4)
-    app = mcp.http_app(path="/mcp", stateless_http=True)
+    app = mcp.http_app(path="/mcp")
     app.routes.append(Route("/health", health_check, methods=["GET", "HEAD"]))
 
     uvicorn.run(app, host="0.0.0.0", port=port)
