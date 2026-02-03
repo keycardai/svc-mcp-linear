@@ -32,7 +32,6 @@ def create_mcp_server() -> FastMCP:
     """
     mcp = FastMCP(
         "Linear MCP Server",
-        stateless_http=True,  # Required for Render/serverless - each request is independent
         instructions="""Linear MCP Server for managing issues and workflow states.
 
 This server provides tools to:
@@ -70,7 +69,7 @@ if __name__ == "__main__":
 
     # Get the ASGI app and add health route manually
     # (FastMCP's @custom_route decorator has bugs in 2.14.4)
-    app = mcp.http_app(path="/mcp")
+    app = mcp.http_app(path="/mcp", stateless_http=True)
     app.routes.append(Route("/health", health_check, methods=["GET", "HEAD"]))
 
     uvicorn.run(app, host="0.0.0.0", port=port)
