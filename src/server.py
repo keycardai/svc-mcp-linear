@@ -13,7 +13,8 @@ import os
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
-from starlette.responses import JSONResponse
+from starlette.responses import PlainTextResponse
+from starlette.routing import Route
 
 from .tools.issues import register_issue_tools
 from .tools.mutations import register_mutation_tools
@@ -56,17 +57,20 @@ Authentication: The Linear API token should be provided in the Authorization hea
 mcp = create_mcp_server()
 
 
-# Health check endpoint for Render (responds to health checks at root path)
-@mcp.custom_route("/", methods=["GET", "HEAD"])
+# Health check endpoint for Render
 async def health_check(request):
-    return JSONResponse({"status": "ok"})
+    return PlainTextResponse("ok")
 
-# For local development
+# For local development and Render deployment
 if __name__ == "__main__":
+    import uvicorn
+
     port = int(os.getenv("PORT", 8000))
     print(f"Starting Linear MCP Server on http://0.0.0.0:{port}/mcp")
-    mcp.run(
-        transport="streamable-http",
-        host="0.0.0.0",
-        port=port,
-    )
+
+    # Get the ASGI app and add health route manually
+    # (FastMCP's @custom_route decorator has bugs in 2.14.4)
+    app = mcp.http_app(path="/mcp")
+    app.routes.append(Route("/health", health_check, methods=["GET", "HEAD"]))
+
+    uvicorn.run(app, host="0.0.0.0", port=port)

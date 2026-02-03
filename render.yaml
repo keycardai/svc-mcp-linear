@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: svc-mcp-linear
+    runtime: python
+    buildCommand: pip install uv && uv sync
+    startCommand: uv run python -m src.server
+    healthCheckPath: /health
+    autoDeploy: true
+    region: oregon
