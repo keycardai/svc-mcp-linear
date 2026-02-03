@@ -13,6 +13,7 @@ import os
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
+from starlette.responses import JSONResponse
 
 from .tools.issues import register_issue_tools
 from .tools.mutations import register_mutation_tools
@@ -53,6 +54,12 @@ Authentication: The Linear API token should be provided in the Authorization hea
 
 # Create the server instance for use by Cloudflare Workers or other entry points
 mcp = create_mcp_server()
+
+
+# Health check endpoint for Render (responds to health checks at root path)
+@mcp.custom_route("/", methods=["GET", "HEAD"])
+async def health_check(request):
+    return JSONResponse({"status": "ok"})
 
 # For local development
 if __name__ == "__main__":
