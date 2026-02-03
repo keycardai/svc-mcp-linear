@@ -39,6 +39,7 @@ This server provides tools to:
 - Create new issues
 - Update issue details and workflow status
 - View available workflow states for teams
+- Post and view project status updates
 
 Authentication: The Linear API token should be provided in the Authorization header as a Bearer token.
 """,

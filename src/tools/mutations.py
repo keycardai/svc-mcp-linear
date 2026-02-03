@@ -89,6 +89,26 @@ mutation($name: String!, $teamIds: [String!]!, $description: String, $state: Str
 }
 """
 
+CREATE_PROJECT_UPDATE_MUTATION = """
+mutation($projectId: String!, $body: String!, $health: ProjectUpdateHealthType) {
+    projectUpdateCreate(input: {
+        projectId: $projectId
+        body: $body
+        health: $health
+    }) {
+        success
+        projectUpdate {
+            id
+            body
+            health
+            createdAt
+            user { name email }
+            project { id name }
+        }
+    }
+}
+"""
+
 
 def register_mutation_tools(mcp: FastMCP) -> None:
     """Register issue mutation tools with the MCP server."""
@@ -232,6 +252,38 @@ def register_mutation_tools(mcp: FastMCP) -> None:
             if result.get("success"):
                 return {"success": True, "project": result.get("project")}
             return {"success": False, "error": "Project creation failed", "isError": True}
+        except LinearClientError as e:
+            return {"success": False, "error": e.message, "isError": True}
+        except ValueError as e:
+            return {"success": False, "error": str(e), "isError": True}
+
+    @mcp.tool(
+        name="create_project_update",
+        description="Post a status update for a Linear project. Requires project_id (UUID from list_projects) and body. Optional: health (onTrack, atRisk, offTrack).",
+    )
+    async def create_project_update(
+        project_id: str,
+        body: str,
+        health: str | None = None,
+    ) -> dict:
+        """Post a status update for a Linear project.
+
+        Args:
+            project_id: The project's internal UUID (get from list_projects).
+            body: The update content (markdown supported).
+            health: Optional health status (onTrack, atRisk, offTrack).
+        """
+        try:
+            variables = {
+                "projectId": project_id,
+                "body": body,
+                "health": health,
+            }
+            data = await execute_query(CREATE_PROJECT_UPDATE_MUTATION, variables)
+            result = data.get("projectUpdateCreate", {})
+            if result.get("success"):
+                return {"success": True, "projectUpdate": result.get("projectUpdate")}
+            return {"success": False, "error": "Project update failed", "isError": True}
         except LinearClientError as e:
             return {"success": False, "error": e.message, "isError": True}
         except ValueError as e:

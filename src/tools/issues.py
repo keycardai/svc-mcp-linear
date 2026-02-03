@@ -105,6 +105,24 @@ query($teamId: String!) {
 }
 """
 
+LIST_PROJECT_UPDATES_QUERY = """
+query($projectId: String!, $first: Int!) {
+    project(id: $projectId) {
+        id
+        name
+        projectUpdates(first: $first) {
+            nodes {
+                id
+                body
+                health
+                createdAt
+                user { name email }
+            }
+        }
+    }
+}
+"""
+
 
 def register_issue_tools(mcp: FastMCP) -> None:
     """Register issue query tools with the MCP server."""
@@ -192,6 +210,40 @@ def register_issue_tools(mcp: FastMCP) -> None:
                 data = await execute_query(LIST_PROJECTS_QUERY)
             projects = data.get("projects", {}).get("nodes", [])
             return {"success": True, "projects": projects, "count": len(projects)}
+        except LinearClientError as e:
+            return {"success": False, "error": e.message, "isError": True}
+        except ValueError as e:
+            return {"success": False, "error": str(e), "isError": True}
+
+    @mcp.tool(
+        name="list_project_updates",
+        description="Get recent status updates for a Linear project. Returns updates with body, health status, date, and author.",
+    )
+    async def list_project_updates(project_id: str, limit: int = 10) -> dict:
+        """List recent status updates for a project.
+
+        Args:
+            project_id: The project's internal UUID (get from list_projects).
+            limit: Number of updates to return (default 10).
+        """
+        try:
+            data = await execute_query(
+                LIST_PROJECT_UPDATES_QUERY, {"projectId": project_id, "first": limit}
+            )
+            project = data.get("project")
+            if project is None:
+                return {
+                    "success": False,
+                    "error": f"Project {project_id} not found",
+                    "isError": True,
+                }
+            updates = project.get("projectUpdates", {}).get("nodes", [])
+            return {
+                "success": True,
+                "project": {"id": project.get("id"), "name": project.get("name")},
+                "updates": updates,
+                "count": len(updates),
+            }
         except LinearClientError as e:
             return {"success": False, "error": e.message, "isError": True}
         except ValueError as e:
