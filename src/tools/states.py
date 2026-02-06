@@ -3,8 +3,6 @@
 Tools for reading Linear workflow states.
 """
 
-from __future__ import annotations
-
 from fastmcp import FastMCP, Context
 
 from ..auth import auth_provider, get_linear_token, LINEAR_API_URL

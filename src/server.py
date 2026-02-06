@@ -4,8 +4,6 @@ This module creates the FastMCP instance with Keycard authentication
 and registers all tools. Uses the Keycard SDK for OAuth token management.
 """
 
-from __future__ import annotations
-
 import os
 
 from dotenv import load_dotenv

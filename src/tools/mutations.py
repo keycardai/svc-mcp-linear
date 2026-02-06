@@ -3,8 +3,6 @@
 Tools for modifying Linear: create_issue, update_issue, update_status, create_project.
 """
 
-from __future__ import annotations
-
 from fastmcp import FastMCP, Context
 
 from ..auth import auth_provider, get_linear_token, LINEAR_API_URL

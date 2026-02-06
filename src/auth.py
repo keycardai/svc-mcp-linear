@@ -4,8 +4,6 @@ This module creates the AuthProvider singleton that is used by all tool modules.
 The auth_provider must be initialized before tools are registered.
 """
 
-from __future__ import annotations
-
 import os
 from typing import TYPE_CHECKING
 

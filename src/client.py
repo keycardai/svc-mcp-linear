@@ -4,8 +4,6 @@ Provides async HTTP client for making authenticated requests to Linear API.
 Token is provided by the calling tool function from Keycard AccessContext.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 import httpx

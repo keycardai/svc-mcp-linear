@@ -3,8 +3,6 @@
 Tools for reading Linear data: my_issues, issue, search, list_projects.
 """
 
-from __future__ import annotations
-
 from fastmcp import FastMCP, Context
 
 from ..auth import auth_provider, get_linear_token, LINEAR_API_URL
