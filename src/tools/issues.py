@@ -5,8 +5,9 @@ Tools for reading Linear data: my_issues, issue, search, list_projects.
 
 from __future__ import annotations
 
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 
+from ..auth import auth_provider, get_linear_token, LINEAR_API_URL
 from ..client import LinearClientError, execute_query
 
 # GraphQL Queries
@@ -131,10 +132,14 @@ def register_issue_tools(mcp: FastMCP) -> None:
         name="my_issues",
         description="Get Linear issues assigned to the authenticated user. Returns list of issues with id, identifier, title, description, state, priority, and project.",
     )
-    async def my_issues() -> dict:
+    @auth_provider.grant(LINEAR_API_URL)
+    async def my_issues(ctx: Context) -> dict:
         """Fetch Linear issues assigned to the current user."""
         try:
-            data = await execute_query(MY_ISSUES_QUERY)
+            access_ctx = ctx.get_state("keycardai")
+            token = get_linear_token(access_ctx)
+
+            data = await execute_query(MY_ISSUES_QUERY, token=token)
             issues = data.get("viewer", {}).get("assignedIssues", {}).get("nodes", [])
             return {"success": True, "issues": issues, "count": len(issues)}
         except LinearClientError as e:
@@ -146,14 +151,18 @@ def register_issue_tools(mcp: FastMCP) -> None:
         name="issue",
         description="Get details of a specific Linear issue by its identifier (e.g., 'ENG-123'). Returns full issue details including comments, labels, assignee, and team.",
     )
-    async def issue(identifier: str) -> dict:
+    @auth_provider.grant(LINEAR_API_URL)
+    async def issue(ctx: Context, identifier: str) -> dict:
         """Fetch a specific Linear issue by identifier.
 
         Args:
             identifier: The issue identifier (e.g., 'ENG-123').
         """
         try:
-            data = await execute_query(ISSUE_QUERY, {"identifier": identifier})
+            access_ctx = ctx.get_state("keycardai")
+            token = get_linear_token(access_ctx)
+
+            data = await execute_query(ISSUE_QUERY, {"identifier": identifier}, token=token)
             issue_data = data.get("issue")
             if issue_data is None:
                 return {
@@ -171,14 +180,18 @@ def register_issue_tools(mcp: FastMCP) -> None:
         name="search",
         description="Search Linear issues by text query. Searches in issue title and description (case-insensitive). Returns matching issues with basic details.",
     )
-    async def search(query: str) -> dict:
+    @auth_provider.grant(LINEAR_API_URL)
+    async def search(ctx: Context, query: str) -> dict:
         """Search issues by text query.
 
         Args:
             query: Search text to match in title or description.
         """
         try:
-            data = await execute_query(SEARCH_ISSUES_QUERY, {"query": query})
+            access_ctx = ctx.get_state("keycardai")
+            token = get_linear_token(access_ctx)
+
+            data = await execute_query(SEARCH_ISSUES_QUERY, {"query": query}, token=token)
             issues = data.get("issues", {}).get("nodes", [])
             return {
                 "success": True,
@@ -195,19 +208,23 @@ def register_issue_tools(mcp: FastMCP) -> None:
         name="list_projects",
         description="List Linear projects, optionally filtered by team. Returns project id, name, state, and associated teams.",
     )
-    async def list_projects(team_id: str | None = None) -> dict:
+    @auth_provider.grant(LINEAR_API_URL)
+    async def list_projects(ctx: Context, team_id: str | None = None) -> dict:
         """List Linear projects.
 
         Args:
             team_id: Optional team UUID to filter projects by.
         """
         try:
+            access_ctx = ctx.get_state("keycardai")
+            token = get_linear_token(access_ctx)
+
             if team_id:
                 data = await execute_query(
-                    LIST_PROJECTS_BY_TEAM_QUERY, {"teamId": team_id}
+                    LIST_PROJECTS_BY_TEAM_QUERY, {"teamId": team_id}, token=token
                 )
             else:
-                data = await execute_query(LIST_PROJECTS_QUERY)
+                data = await execute_query(LIST_PROJECTS_QUERY, token=token)
             projects = data.get("projects", {}).get("nodes", [])
             return {"success": True, "projects": projects, "count": len(projects)}
         except LinearClientError as e:
@@ -219,7 +236,8 @@ def register_issue_tools(mcp: FastMCP) -> None:
         name="list_project_updates",
         description="Get recent status updates for a Linear project. Returns updates with body, health status, date, and author.",
     )
-    async def list_project_updates(project_id: str, limit: int = 10) -> dict:
+    @auth_provider.grant(LINEAR_API_URL)
+    async def list_project_updates(ctx: Context, project_id: str, limit: int = 10) -> dict:
         """List recent status updates for a project.
 
         Args:
@@ -227,8 +245,11 @@ def register_issue_tools(mcp: FastMCP) -> None:
             limit: Number of updates to return (default 10).
         """
         try:
+            access_ctx = ctx.get_state("keycardai")
+            token = get_linear_token(access_ctx)
+
             data = await execute_query(
-                LIST_PROJECT_UPDATES_QUERY, {"projectId": project_id, "first": limit}
+                LIST_PROJECT_UPDATES_QUERY, {"projectId": project_id, "first": limit}, token=token
             )
             project = data.get("project")
             if project is None:

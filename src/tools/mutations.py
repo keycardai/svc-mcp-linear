@@ -5,8 +5,9 @@ Tools for modifying Linear: create_issue, update_issue, update_status, create_pr
 
 from __future__ import annotations
 
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 
+from ..auth import auth_provider, get_linear_token, LINEAR_API_URL
 from ..client import LinearClientError, execute_query
 
 # GraphQL Mutations
@@ -117,7 +118,9 @@ def register_mutation_tools(mcp: FastMCP) -> None:
         name="create_issue",
         description="Create a new Linear issue. Requires team_id and title. Optional: description, priority (0=none, 1=urgent, 2=high, 3=medium, 4=low), state_id, assignee_id, project_id.",
     )
+    @auth_provider.grant(LINEAR_API_URL)
     async def create_issue(
+        ctx: Context,
         team_id: str,
         title: str,
         description: str | None = None,
@@ -138,6 +141,9 @@ def register_mutation_tools(mcp: FastMCP) -> None:
             project_id: Optional project ID to assign issue to (get from list_projects tool).
         """
         try:
+            access_ctx = ctx.get_state("keycardai")
+            token = get_linear_token(access_ctx)
+
             variables = {
                 "teamId": team_id,
                 "title": title,
@@ -147,7 +153,7 @@ def register_mutation_tools(mcp: FastMCP) -> None:
                 "assigneeId": assignee_id,
                 "projectId": project_id,
             }
-            data = await execute_query(CREATE_ISSUE_MUTATION, variables)
+            data = await execute_query(CREATE_ISSUE_MUTATION, variables, token=token)
             result = data.get("issueCreate", {})
             if result.get("success"):
                 return {"success": True, "issue": result.get("issue")}
@@ -161,7 +167,9 @@ def register_mutation_tools(mcp: FastMCP) -> None:
         name="update_issue",
         description="Update an existing Linear issue. Requires issue_id (internal UUID from issue query). Optional: title, description, priority, state_id, assignee_id.",
     )
+    @auth_provider.grant(LINEAR_API_URL)
     async def update_issue(
+        ctx: Context,
         issue_id: str,
         title: str | None = None,
         description: str | None = None,
@@ -180,6 +188,9 @@ def register_mutation_tools(mcp: FastMCP) -> None:
             assignee_id: Optional new assignee user ID.
         """
         try:
+            access_ctx = ctx.get_state("keycardai")
+            token = get_linear_token(access_ctx)
+
             variables = {
                 "id": issue_id,
                 "title": title,
@@ -188,7 +199,7 @@ def register_mutation_tools(mcp: FastMCP) -> None:
                 "stateId": state_id,
                 "assigneeId": assignee_id,
             }
-            data = await execute_query(UPDATE_ISSUE_MUTATION, variables)
+            data = await execute_query(UPDATE_ISSUE_MUTATION, variables, token=token)
             result = data.get("issueUpdate", {})
             if result.get("success"):
                 return {"success": True, "issue": result.get("issue")}
@@ -202,7 +213,8 @@ def register_mutation_tools(mcp: FastMCP) -> None:
         name="update_status",
         description="Update the workflow status of a Linear issue. Requires issue_id and state_id (get state_id from states tool).",
     )
-    async def update_status(issue_id: str, state_id: str) -> dict:
+    @auth_provider.grant(LINEAR_API_URL)
+    async def update_status(ctx: Context, issue_id: str, state_id: str) -> dict:
         """Update the workflow status of an issue.
 
         Args:
@@ -210,8 +222,11 @@ def register_mutation_tools(mcp: FastMCP) -> None:
             state_id: The target workflow state ID (get from states tool).
         """
         try:
+            access_ctx = ctx.get_state("keycardai")
+            token = get_linear_token(access_ctx)
+
             data = await execute_query(
-                UPDATE_STATUS_MUTATION, {"id": issue_id, "stateId": state_id}
+                UPDATE_STATUS_MUTATION, {"id": issue_id, "stateId": state_id}, token=token
             )
             result = data.get("issueUpdate", {})
             if result.get("success"):
@@ -226,7 +241,9 @@ def register_mutation_tools(mcp: FastMCP) -> None:
         name="create_project",
         description="Create a new Linear project. Requires name and team_id. Optional: description, state (planned, started, paused, completed, canceled).",
     )
+    @auth_provider.grant(LINEAR_API_URL)
     async def create_project(
+        ctx: Context,
         name: str,
         team_id: str,
         description: str | None = None,
@@ -241,13 +258,16 @@ def register_mutation_tools(mcp: FastMCP) -> None:
             state: Optional project state (planned, started, paused, completed, canceled).
         """
         try:
+            access_ctx = ctx.get_state("keycardai")
+            token = get_linear_token(access_ctx)
+
             variables = {
                 "name": name,
                 "teamIds": [team_id],  # API expects array
                 "description": description,
                 "state": state,
             }
-            data = await execute_query(CREATE_PROJECT_MUTATION, variables)
+            data = await execute_query(CREATE_PROJECT_MUTATION, variables, token=token)
             result = data.get("projectCreate", {})
             if result.get("success"):
                 return {"success": True, "project": result.get("project")}
@@ -261,7 +281,9 @@ def register_mutation_tools(mcp: FastMCP) -> None:
         name="create_project_update",
         description="Post a status update for a Linear project. Requires project_id (UUID from list_projects) and body. Optional: health (onTrack, atRisk, offTrack).",
     )
+    @auth_provider.grant(LINEAR_API_URL)
     async def create_project_update(
+        ctx: Context,
         project_id: str,
         body: str,
         health: str | None = None,
@@ -274,12 +296,15 @@ def register_mutation_tools(mcp: FastMCP) -> None:
             health: Optional health status (onTrack, atRisk, offTrack).
         """
         try:
+            access_ctx = ctx.get_state("keycardai")
+            token = get_linear_token(access_ctx)
+
             variables = {
                 "projectId": project_id,
                 "body": body,
                 "health": health,
             }
-            data = await execute_query(CREATE_PROJECT_UPDATE_MUTATION, variables)
+            data = await execute_query(CREATE_PROJECT_UPDATE_MUTATION, variables, token=token)
             result = data.get("projectUpdateCreate", {})
             if result.get("success"):
                 return {"success": True, "projectUpdate": result.get("projectUpdate")}

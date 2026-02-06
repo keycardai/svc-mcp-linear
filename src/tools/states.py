@@ -5,8 +5,9 @@ Tools for reading Linear workflow states.
 
 from __future__ import annotations
 
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 
+from ..auth import auth_provider, get_linear_token, LINEAR_API_URL
 from ..client import LinearClientError, execute_query
 
 # GraphQL Queries
@@ -52,15 +53,19 @@ def register_state_tools(mcp: FastMCP) -> None:
         name="states",
         description="Get available workflow states for a Linear team. If team_id is not provided, returns states for all teams. Use this to get state_id values for update_status tool. State types: backlog, unstarted, started, completed, canceled.",
     )
-    async def states(team_id: str | None = None) -> dict:
+    @auth_provider.grant(LINEAR_API_URL)
+    async def states(ctx: Context, team_id: str | None = None) -> dict:
         """Get workflow states for a team or all teams.
 
         Args:
             team_id: Optional team ID. If not provided, returns states for all teams.
         """
         try:
+            access_ctx = ctx.get_state("keycardai")
+            token = get_linear_token(access_ctx)
+
             if team_id:
-                data = await execute_query(TEAM_STATES_QUERY, {"teamId": team_id})
+                data = await execute_query(TEAM_STATES_QUERY, {"teamId": team_id}, token=token)
                 team_data = data.get("team")
                 if team_data is None:
                     return {
@@ -77,7 +82,7 @@ def register_state_tools(mcp: FastMCP) -> None:
                     "states": team_data.get("states", {}).get("nodes", []),
                 }
             else:
-                data = await execute_query(ALL_TEAMS_STATES_QUERY)
+                data = await execute_query(ALL_TEAMS_STATES_QUERY, token=token)
                 teams = data.get("teams", {}).get("nodes", [])
                 return {
                     "success": True,

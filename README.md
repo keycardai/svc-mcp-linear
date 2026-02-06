@@ -1,24 +1,23 @@
 # svc-mcp-linear
 
-Linear MCP Server.
+Linear MCP Server with Keycard Authentication.
 
-This is a "dumb" MCP server that receives pre-exchanged tokens from an MCP Gateway. It does not handle authentication itself - the gateway handles OAuth and token exchange.
+This server uses the Keycard SDK to handle OAuth authentication, providing secure per-user access to the Linear API.
 
 ## Architecture
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  MCP Client │────▶│ MCP Gateway │────▶│ This Server │────▶ Linear API
-└─────────────┘     └─────────────┘     └─────────────┘
-                           │                    │
-                    (Token Exchange)     (Bearer token in
-                           │              Auth header)
-                    ┌──────▼──────┐
-                    │   Keycard   │
-                    └─────────────┘
+┌─────────────┐     ┌─────────────┐
+│  MCP Client │────▶│ This Server │────▶ Linear API
+└─────────────┘     └─────────────┘
+                          │
+                   ┌──────▼──────┐
+                   │   Keycard   │
+                   │   (OAuth)   │
+                   └─────────────┘
 ```
 
-The gateway exchanges tokens and passes the Linear API token in the `Authorization` header as a Bearer token. This server simply reads that token and uses it for Linear API calls.
+Keycard handles OAuth token exchange. Each user authenticates through Keycard, and the server receives user-specific tokens via the `@auth_provider.grant()` decorator.
 
 ## Tools
 
@@ -28,10 +27,12 @@ The gateway exchanges tokens and passes the Linear API token in the `Authorizati
 | `issue` | Query | Get details of a specific issue by identifier (e.g., ENG-123) |
 | `search` | Query | Search issues by text query (searches title and description) |
 | `list_projects` | Query | List projects, optionally filtered by team |
+| `list_project_updates` | Query | Get recent status updates for a project |
 | `create_issue` | Mutation | Create a new issue (requires team_id and title, optional project_id) |
 | `update_issue` | Mutation | Update issue fields (title, description, priority, etc.) |
 | `update_status` | Mutation | Change issue workflow state |
 | `create_project` | Mutation | Create a new project (requires name and team_id) |
+| `create_project_update` | Mutation | Post a status update for a project |
 | `states` | Query | List available workflow states for a team |
 
 ### Tool Details
@@ -116,6 +117,13 @@ List Linear projects.
 }
 ```
 
+#### `list_project_updates`
+Get recent status updates for a project.
+
+**Parameters:**
+- `project_id` (required): Project UUID (get from list_projects)
+- `limit` (optional): Number of updates to return (default 10)
+
 #### `create_issue`
 Create a new issue.
 
@@ -168,6 +176,14 @@ Create a new Linear project.
 }
 ```
 
+#### `create_project_update`
+Post a status update for a project.
+
+**Parameters:**
+- `project_id` (required): Project UUID (get from list_projects)
+- `body` (required): Update content (markdown supported)
+- `health` (optional): Health status (onTrack, atRisk, offTrack)
+
 #### `states`
 Get available workflow states.
 
@@ -193,6 +209,7 @@ Get available workflow states.
 
 - Python 3.12+
 - [uv](https://github.com/astral-sh/uv) package manager
+- Keycard application credentials (zone_id, client_id, client_secret)
 
 ### Setup
 
@@ -205,18 +222,27 @@ Get available workflow states.
    ```bash
    uv venv
    source .venv/bin/activate
-   uv pip install -e ".[dev]"
+   uv sync
    ```
 
 3. Create `.env` from example:
    ```bash
    cp .env.example .env
-   # Edit .env with your Linear API token
    ```
 
-4. Get a Linear API token:
-   - Go to Linear Settings > API > Personal API Keys
-   - Create a new key and copy it to your `.env` file
+4. Configure Keycard credentials in `.env`:
+   ```bash
+   KEYCARD_ZONE_ID=your_zone_id
+   KEYCARD_CLIENT_ID=your_client_id
+   KEYCARD_CLIENT_SECRET=your_client_secret
+   MCP_SERVER_URL=http://localhost:8000
+   PORT=8000
+   ```
+
+   Get these credentials from your Keycard dashboard:
+   - Create a Zone at keycard.cloud
+   - Add Linear as a credential provider
+   - Register an application and copy the credentials
 
 ### Run Locally
 
@@ -226,23 +252,9 @@ uv run python -m src.server
 
 Server starts at `http://localhost:8000/mcp`
 
-### Testing with MCP Inspector
+### Testing
 
-You can test the server with the MCP Inspector or curl:
-
-```bash
-# List tools
-curl -X POST http://localhost:8000/mcp \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer lin_api_xxx" \
-  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
-
-# Call my_issues tool
-curl -X POST http://localhost:8000/mcp \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer lin_api_xxx" \
-  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"my_issues","arguments":{}},"id":2}'
-```
+The server requires Keycard authentication. To test, use an MCP client configured with Keycard auth pointing to your server URL.
 
 ## Running Tests
 
@@ -261,13 +273,18 @@ The server is deployed on Render at `https://svc-mcp-linear.onrender.com/mcp`.
 
 ### Configuration
 
-The server uses `stateless_http=True` for compatibility with Render's infrastructure (handles restarts and scaling without session state issues).
+Environment variables required on Render:
+- `KEYCARD_ZONE_ID`
+- `KEYCARD_CLIENT_ID`
+- `KEYCARD_CLIENT_SECRET`
+- `MCP_SERVER_URL` (set to your Render URL)
+- `PORT` (Render provides this automatically)
 
 ### Deploy
 
 1. Connect your repo to Render
 2. Set the start command: `uv run python -m src.server`
-3. Set environment variable `PORT` (Render provides this automatically)
+3. Add environment variables in Render dashboard
 
 ### Manual Deploy
 
@@ -298,8 +315,9 @@ All tools return a consistent response structure:
 ```
 
 Common errors:
-- `Missing Authorization header` - No Bearer token provided
-- `Linear API returned HTTP 401` - Invalid or expired token
+- `No authentication context` - Keycard auth not configured
+- `Authentication errors: [...]` - User not authenticated or token expired
+- `Linear API returned HTTP 401` - Token invalid or revoked
 - `Issue ENG-999 not found` - Issue doesn't exist or no access
 
 ## Project Structure
@@ -308,12 +326,13 @@ Common errors:
 svc-mcp-linear/
 ├── src/
 │   ├── __init__.py
+│   ├── auth.py            # Keycard AuthProvider singleton
 │   ├── server.py          # FastMCP entry point
 │   ├── client.py          # Linear GraphQL client
 │   └── tools/
 │       ├── __init__.py
-│       ├── issues.py      # my_issues, issue, search
-│       ├── mutations.py   # create_issue, update_issue, update_status
+│       ├── issues.py      # my_issues, issue, search, list_projects, list_project_updates
+│       ├── mutations.py   # create_issue, update_issue, update_status, create_project, create_project_update
 │       └── states.py      # states
 ├── tests/
 │   ├── __init__.py
@@ -321,7 +340,6 @@ svc-mcp-linear/
 │   ├── test_client.py
 │   └── test_tools.py
 ├── pyproject.toml
-├── wrangler.toml        # Legacy - for future Cloudflare Workers support
 ├── .env.example
 └── README.md
 ```

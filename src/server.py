@@ -1,10 +1,7 @@
 """FastMCP Server Definition for Linear MCP.
 
-This module creates the FastMCP instance and registers all tools.
-The server receives pre-exchanged tokens from an MCP Gateway.
-
-No Keycard SDK - the gateway handles all OAuth/token exchange.
-Token is read from the Authorization header (Bearer token).
+This module creates the FastMCP instance with Keycard authentication
+and registers all tools. Uses the Keycard SDK for OAuth token management.
 """
 
 from __future__ import annotations
@@ -14,6 +11,7 @@ import os
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 
+from .auth import auth_provider
 from .tools.issues import register_issue_tools
 from .tools.mutations import register_mutation_tools
 from .tools.states import register_state_tools
@@ -26,10 +24,14 @@ def create_mcp_server() -> FastMCP:
     """Create and configure the FastMCP server instance.
 
     Returns:
-        Configured FastMCP instance with all tools registered.
+        Configured FastMCP instance with Keycard auth and all tools registered.
     """
+    # Get RemoteAuthProvider from Keycard AuthProvider
+    auth = auth_provider.get_remote_auth_provider()
+
     mcp = FastMCP(
         "Linear MCP Server",
+        auth=auth,
         instructions="""Linear MCP Server for managing issues and workflow states.
 
 This server provides tools to:
@@ -39,7 +41,7 @@ This server provides tools to:
 - View available workflow states for teams
 - Post and view project status updates
 
-Authentication: The Linear API token should be provided in the Authorization header as a Bearer token.
+Authentication is handled via Keycard OAuth.
 """,
     )
 
@@ -51,14 +53,18 @@ Authentication: The Linear API token should be provided in the Authorization hea
     return mcp
 
 
-# Create the server instance for use by Cloudflare Workers or other entry points
+# Create the server instance
 mcp = create_mcp_server()
 
 
 # For local development and Render deployment
 if __name__ == "__main__":
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
     port = int(os.getenv("PORT", 8000))
-    print(f"Starting Linear MCP Server on http://0.0.0.0:{port}/mcp")
+    logger.info(f"Starting Linear MCP Server on http://0.0.0.0:{port}/mcp")
 
     mcp.run(
         transport="streamable-http",

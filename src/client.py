@@ -1,7 +1,7 @@
 """Linear GraphQL Client.
 
 Provides async HTTP client for making authenticated requests to Linear API.
-Token is extracted from the incoming request's Authorization header.
+Token is provided by the calling tool function from Keycard AccessContext.
 """
 
 from __future__ import annotations
@@ -9,7 +9,6 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-from fastmcp.server.dependencies import get_http_request
 
 LINEAR_API_URL = "https://api.linear.app/graphql"
 
@@ -21,31 +20,6 @@ class LinearClientError(Exception):
         self.message = message
         self.errors = errors or []
         super().__init__(message)
-
-
-def get_bearer_token() -> str:
-    """Extract Bearer token from the current request's Authorization header.
-
-    Returns:
-        The Bearer token string.
-
-    Raises:
-        ValueError: If Authorization header is missing or invalid.
-    """
-    try:
-        request = get_http_request()
-    except RuntimeError:
-        raise ValueError("No active HTTP request - cannot extract token")
-
-    auth_header = request.headers.get("authorization", "")
-    if not auth_header:
-        raise ValueError("Missing Authorization header")
-
-    parts = auth_header.split(" ", 1)
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise ValueError("Invalid Authorization header format - expected 'Bearer <token>'")
-
-    return parts[1]
 
 
 def sanitize_variables(variables: dict[str, Any]) -> dict[str, Any]:
@@ -65,25 +39,22 @@ def sanitize_variables(variables: dict[str, Any]) -> dict[str, Any]:
 async def execute_query(
     query: str,
     variables: dict[str, Any] | None = None,
-    token: str | None = None,
+    *,
+    token: str,
 ) -> dict[str, Any]:
     """Execute a GraphQL query against the Linear API.
 
     Args:
         query: GraphQL query or mutation string.
         variables: Optional dictionary of variables.
-        token: Optional token override (defaults to extracting from request).
+        token: Linear API access token (required).
 
     Returns:
         The 'data' portion of the GraphQL response.
 
     Raises:
         LinearClientError: If the API returns errors.
-        ValueError: If token cannot be obtained.
     """
-    if token is None:
-        token = get_bearer_token()
-
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
