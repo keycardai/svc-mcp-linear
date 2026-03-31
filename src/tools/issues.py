@@ -134,7 +134,7 @@ def register_issue_tools(mcp: FastMCP) -> None:
     async def my_issues(ctx: Context) -> dict:
         """Fetch Linear issues assigned to the current user."""
         try:
-            access_ctx = ctx.get_state("keycardai")
+            access_ctx = await ctx.get_state("keycardai")
             token = get_linear_token(access_ctx)
 
             data = await execute_query(MY_ISSUES_QUERY, token=token)
@@ -157,7 +157,7 @@ def register_issue_tools(mcp: FastMCP) -> None:
             identifier: The issue identifier (e.g., 'ENG-123').
         """
         try:
-            access_ctx = ctx.get_state("keycardai")
+            access_ctx = await ctx.get_state("keycardai")
             token = get_linear_token(access_ctx)
 
             data = await execute_query(ISSUE_QUERY, {"identifier": identifier}, token=token)
@@ -186,7 +186,7 @@ def register_issue_tools(mcp: FastMCP) -> None:
             query: Search text to match in title or description.
         """
         try:
-            access_ctx = ctx.get_state("keycardai")
+            access_ctx = await ctx.get_state("keycardai")
             token = get_linear_token(access_ctx)
 
             data = await execute_query(SEARCH_ISSUES_QUERY, {"query": query}, token=token)
@@ -214,7 +214,7 @@ def register_issue_tools(mcp: FastMCP) -> None:
             team_id: Optional team UUID to filter projects by.
         """
         try:
-            access_ctx = ctx.get_state("keycardai")
+            access_ctx = await ctx.get_state("keycardai")
             token = get_linear_token(access_ctx)
 
             if team_id:
@@ -243,7 +243,7 @@ def register_issue_tools(mcp: FastMCP) -> None:
             limit: Number of updates to return (default 10).
         """
         try:
-            access_ctx = ctx.get_state("keycardai")
+            access_ctx = await ctx.get_state("keycardai")
             token = get_linear_token(access_ctx)
 
             data = await execute_query(
