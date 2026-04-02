@@ -59,7 +59,7 @@ def register_state_tools(mcp: FastMCP) -> None:
             team_id: Optional team ID. If not provided, returns states for all teams.
         """
         try:
-            access_ctx = ctx.get_state("keycardai")
+            access_ctx = await ctx.get_state("keycardai")
             token = get_linear_token(access_ctx)
 
             if team_id:

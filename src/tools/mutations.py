@@ -139,7 +139,7 @@ def register_mutation_tools(mcp: FastMCP) -> None:
             project_id: Optional project ID to assign issue to (get from list_projects tool).
         """
         try:
-            access_ctx = ctx.get_state("keycardai")
+            access_ctx = await ctx.get_state("keycardai")
             token = get_linear_token(access_ctx)
 
             variables = {
@@ -186,7 +186,7 @@ def register_mutation_tools(mcp: FastMCP) -> None:
             assignee_id: Optional new assignee user ID.
         """
         try:
-            access_ctx = ctx.get_state("keycardai")
+            access_ctx = await ctx.get_state("keycardai")
             token = get_linear_token(access_ctx)
 
             variables = {
@@ -220,7 +220,7 @@ def register_mutation_tools(mcp: FastMCP) -> None:
             state_id: The target workflow state ID (get from states tool).
         """
         try:
-            access_ctx = ctx.get_state("keycardai")
+            access_ctx = await ctx.get_state("keycardai")
             token = get_linear_token(access_ctx)
 
             data = await execute_query(
@@ -256,7 +256,7 @@ def register_mutation_tools(mcp: FastMCP) -> None:
             state: Optional project state (planned, started, paused, completed, canceled).
         """
         try:
-            access_ctx = ctx.get_state("keycardai")
+            access_ctx = await ctx.get_state("keycardai")
             token = get_linear_token(access_ctx)
 
             variables = {
@@ -294,7 +294,7 @@ def register_mutation_tools(mcp: FastMCP) -> None:
             health: Optional health status (onTrack, atRisk, offTrack).
         """
         try:
-            access_ctx = ctx.get_state("keycardai")
+            access_ctx = await ctx.get_state("keycardai")
             token = get_linear_token(access_ctx)
 
             variables = {
