@@ -27,6 +27,26 @@ query {
 }
 """
 
+MY_CREATED_ISSUES_QUERY = """
+query {
+    viewer {
+        createdIssues(first: 50) {
+            nodes {
+                id
+                identifier
+                title
+                description
+                state { name type }
+                priority
+                project { name }
+                team { id name }
+                assignee { name email }
+            }
+        }
+    }
+}
+"""
+
 ISSUE_QUERY = """
 query($identifier: String!) {
     issue(id: $identifier) {
@@ -139,6 +159,25 @@ def register_issue_tools(mcp: FastMCP) -> None:
 
             data = await execute_query(MY_ISSUES_QUERY, token=token)
             issues = data.get("viewer", {}).get("assignedIssues", {}).get("nodes", [])
+            return {"success": True, "issues": issues, "count": len(issues)}
+        except LinearClientError as e:
+            return {"success": False, "error": e.message, "isError": True}
+        except ValueError as e:
+            return {"success": False, "error": str(e), "isError": True}
+
+    @mcp.tool(
+        name="my_created_issues",
+        description="Get Linear issues created by the authenticated user. Includes unassigned issues (e.g., in Triage). Returns issues with id, identifier, title, state (name and type), priority, project, team, and assignee.",
+    )
+    @auth_provider.grant(LINEAR_API_URL)
+    async def my_created_issues(ctx: Context) -> dict:
+        """Fetch Linear issues created by the current user."""
+        try:
+            access_ctx = await ctx.get_state("keycardai")
+            token = get_linear_token(access_ctx)
+
+            data = await execute_query(MY_CREATED_ISSUES_QUERY, token=token)
+            issues = data.get("viewer", {}).get("createdIssues", {}).get("nodes", [])
             return {"success": True, "issues": issues, "count": len(issues)}
         except LinearClientError as e:
             return {"success": False, "error": e.message, "isError": True}
