@@ -24,6 +24,7 @@ Keycard handles OAuth token exchange. Each user authenticates through Keycard, a
 | Tool | Type | Description |
 |------|------|-------------|
 | `my_issues` | Query | Get issues assigned to authenticated user |
+| `my_created_issues` | Query | Get issues created by authenticated user (includes unassigned/Triage) |
 | `issue` | Query | Get details of a specific issue by identifier (e.g., ENG-123) |
 | `search` | Query | Search issues by text query (searches title and description) |
 | `list_projects` | Query | List projects, optionally filtered by team |
@@ -53,6 +54,31 @@ Returns issues assigned to the authenticated user.
       "state": { "name": "In Progress" },
       "priority": 2,
       "project": { "name": "Backend" }
+    }
+  ],
+  "count": 1
+}
+```
+
+#### `my_created_issues`
+Returns issues created by the authenticated user. Unlike `my_issues`, this includes
+issues the user filed but didn't assign to themselves — e.g., tickets sitting in a
+team's Triage inbox.
+
+**Response:**
+```json
+{
+  "success": true,
+  "issues": [
+    {
+      "id": "uuid",
+      "identifier": "AGE-200",
+      "title": "New ticket in triage",
+      "state": { "name": "Triage", "type": "triage" },
+      "priority": 0,
+      "project": null,
+      "team": { "id": "team-uuid", "name": "Agent Dev" },
+      "assignee": null
     }
   ],
   "count": 1
@@ -137,7 +163,7 @@ Create a new issue.
 - `project_id` (optional): Project UUID to assign issue to (get from `list_projects`)
 
 #### `update_issue`
-Update an existing issue.
+Update an existing issue. Also supports moving the issue to a different team.
 
 **Parameters:**
 - `issue_id` (required): Issue UUID (from issue query, not the identifier)
@@ -146,6 +172,8 @@ Update an existing issue.
 - `priority` (optional): New priority
 - `state_id` (optional): New workflow state UUID
 - `assignee_id` (optional): New assignee UUID
+- `team_id` (optional): Target team UUID. When set, moves the issue to that team. Linear maps the state to one of the same type on the target team and clears the project if it isn't shared — pass `state_id` and/or `project_id` to control those.
+- `project_id` (optional): Project UUID to assign the issue to. Pass an empty string to unassign.
 
 #### `update_status`
 Change issue workflow state.

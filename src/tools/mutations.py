@@ -35,13 +35,15 @@ mutation($teamId: String!, $title: String!, $description: String, $priority: Int
 """
 
 UPDATE_ISSUE_MUTATION = """
-mutation($id: String!, $title: String, $description: String, $priority: Int, $stateId: String, $assigneeId: String) {
+mutation($id: String!, $title: String, $description: String, $priority: Int, $stateId: String, $assigneeId: String, $teamId: String, $projectId: String) {
     issueUpdate(id: $id, input: {
         title: $title
         description: $description
         priority: $priority
         stateId: $stateId
         assigneeId: $assigneeId
+        teamId: $teamId
+        projectId: $projectId
     }) {
         success
         issue {
@@ -51,6 +53,8 @@ mutation($id: String!, $title: String, $description: String, $priority: Int, $st
             url
             state { name }
             assignee { name }
+            team { id name }
+            project { id name }
         }
     }
 }
@@ -163,7 +167,7 @@ def register_mutation_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(
         name="update_issue",
-        description="Update an existing Linear issue. Requires issue_id (internal UUID from issue query). Optional: title, description, priority, state_id, assignee_id.",
+        description="Update an existing Linear issue. Requires issue_id (internal UUID from issue query). Optional: title, description, priority, state_id, assignee_id, team_id (moves issue to a different team), project_id (assigns/moves to a project; pass empty string to unassign).",
     )
     @auth_provider.grant(LINEAR_API_URL)
     async def update_issue(
@@ -174,6 +178,8 @@ def register_mutation_tools(mcp: FastMCP) -> None:
         priority: int | None = None,
         state_id: str | None = None,
         assignee_id: str | None = None,
+        team_id: str | None = None,
+        project_id: str | None = None,
     ) -> dict:
         """Update an existing Linear issue.
 
@@ -184,6 +190,12 @@ def register_mutation_tools(mcp: FastMCP) -> None:
             priority: Optional new priority (0=none, 1=urgent, 2=high, 3=medium, 4=low).
             state_id: Optional new workflow state ID.
             assignee_id: Optional new assignee user ID.
+            team_id: Optional target team UUID. When provided, moves the issue to that team.
+                Linear maps the current state to one of the same type on the target team and
+                clears the project if it isn't shared. To control these, also pass state_id
+                (from the target team) and/or project_id.
+            project_id: Optional project UUID to assign the issue to. Pass an empty string
+                to unassign the issue from its current project.
         """
         try:
             access_ctx = await ctx.get_state("keycardai")
@@ -196,6 +208,8 @@ def register_mutation_tools(mcp: FastMCP) -> None:
                 "priority": priority,
                 "stateId": state_id,
                 "assigneeId": assignee_id,
+                "teamId": team_id,
+                "projectId": project_id,
             }
             data = await execute_query(UPDATE_ISSUE_MUTATION, variables, token=token)
             result = data.get("issueUpdate", {})
