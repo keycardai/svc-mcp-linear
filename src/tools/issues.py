@@ -1,6 +1,6 @@
 """Query Tools.
 
-Tools for reading Linear data: my_issues, issue, search, list_projects.
+Tools for reading Linear data: me, my_issues, issue, search, list_projects.
 """
 
 from fastmcp import FastMCP, Context
@@ -9,6 +9,17 @@ from ..auth import auth_provider, get_linear_token, LINEAR_API_URL
 from ..client import LinearClientError, execute_query
 
 # GraphQL Queries
+ME_QUERY = """
+query {
+    viewer {
+        id
+        name
+        email
+        displayName
+    }
+}
+"""
+
 MY_ISSUES_QUERY = """
 query {
     viewer {
@@ -145,6 +156,31 @@ query($projectId: String!, $first: Int!) {
 
 def register_issue_tools(mcp: FastMCP) -> None:
     """Register issue query tools with the MCP server."""
+
+    @mcp.tool(
+        name="me",
+        description="Get the authenticated user's Linear identity: id (UUID), name, email, displayName. Use the id as assignee_id in create_issue / update_issue to assign tickets to yourself.",
+    )
+    @auth_provider.grant(LINEAR_API_URL)
+    async def me(ctx: Context) -> dict:
+        """Fetch the authenticated user's Linear profile."""
+        try:
+            access_ctx = await ctx.get_state("keycardai")
+            token = get_linear_token(access_ctx)
+
+            data = await execute_query(ME_QUERY, token=token)
+            viewer = data.get("viewer")
+            if viewer is None:
+                return {
+                    "success": False,
+                    "error": "Could not retrieve viewer info",
+                    "isError": True,
+                }
+            return {"success": True, "user": viewer}
+        except LinearClientError as e:
+            return {"success": False, "error": e.message, "isError": True}
+        except ValueError as e:
+            return {"success": False, "error": str(e), "isError": True}
 
     @mcp.tool(
         name="my_issues",
