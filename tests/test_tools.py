@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastmcp import FastMCP
 
 from src.client import LinearClientError
 from src.tools.issues import register_issue_tools
+from src.tools.milestones import register_milestone_tools
 from src.tools.mutations import register_mutation_tools
 from src.tools.states import register_state_tools
+
+
+def make_ctx() -> MagicMock:
+    """Return a mock FastMCP Context with async get_state."""
+    ctx = MagicMock()
+    ctx.get_state = AsyncMock(return_value=MagicMock())
+    return ctx
 
 
 class TestIssueTools:
@@ -37,13 +45,14 @@ class TestIssueTools:
         }
 
         with patch("src.tools.issues.execute_query", AsyncMock(return_value=mock_data)):
-            my_issues_fn = mcp._tool_manager._tools["my_issues"].fn
-            result = await my_issues_fn()
+            with patch("src.tools.issues.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("my_issues")
+                result = await tool.fn(make_ctx())
 
-            assert result["success"] is True
-            assert len(result["issues"]) == 1
-            assert result["issues"][0]["identifier"] == "ENG-1"
-            assert result["count"] == 1
+                assert result["success"] is True
+                assert len(result["issues"]) == 1
+                assert result["issues"][0]["identifier"] == "ENG-1"
+                assert result["count"] == 1
 
     @pytest.mark.asyncio
     async def test_my_issues_handles_error(self, mcp: FastMCP):
@@ -52,12 +61,13 @@ class TestIssueTools:
             "src.tools.issues.execute_query",
             AsyncMock(side_effect=LinearClientError("Auth failed")),
         ):
-            my_issues_fn = mcp._tool_manager._tools["my_issues"].fn
-            result = await my_issues_fn()
+            with patch("src.tools.issues.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("my_issues")
+                result = await tool.fn(make_ctx())
 
-            assert result["success"] is False
-            assert "Auth failed" in result["error"]
-            assert result["isError"] is True
+                assert result["success"] is False
+                assert "Auth failed" in result["error"]
+                assert result["isError"] is True
 
     @pytest.mark.asyncio
     async def test_issue_returns_single_issue(self, mcp: FastMCP):
@@ -72,11 +82,12 @@ class TestIssueTools:
         }
 
         with patch("src.tools.issues.execute_query", AsyncMock(return_value=mock_data)):
-            issue_fn = mcp._tool_manager._tools["issue"].fn
-            result = await issue_fn(identifier="ENG-123")
+            with patch("src.tools.issues.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("issue")
+                result = await tool.fn(make_ctx(), identifier="ENG-123")
 
-            assert result["success"] is True
-            assert result["issue"]["identifier"] == "ENG-123"
+                assert result["success"] is True
+                assert result["issue"]["identifier"] == "ENG-123"
 
     @pytest.mark.asyncio
     async def test_issue_handles_not_found(self, mcp: FastMCP):
@@ -84,11 +95,12 @@ class TestIssueTools:
         mock_data = {"issue": None}
 
         with patch("src.tools.issues.execute_query", AsyncMock(return_value=mock_data)):
-            issue_fn = mcp._tool_manager._tools["issue"].fn
-            result = await issue_fn(identifier="ENG-999")
+            with patch("src.tools.issues.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("issue")
+                result = await tool.fn(make_ctx(), identifier="ENG-999")
 
-            assert result["success"] is False
-            assert "not found" in result["error"]
+                assert result["success"] is False
+                assert "not found" in result["error"]
 
     @pytest.mark.asyncio
     async def test_search_returns_matching_issues(self, mcp: FastMCP):
@@ -103,13 +115,14 @@ class TestIssueTools:
         }
 
         with patch("src.tools.issues.execute_query", AsyncMock(return_value=mock_data)):
-            search_fn = mcp._tool_manager._tools["search"].fn
-            result = await search_fn(query="bug")
+            with patch("src.tools.issues.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("search")
+                result = await tool.fn(make_ctx(), query="bug")
 
-            assert result["success"] is True
-            assert len(result["issues"]) == 2
-            assert result["query"] == "bug"
-            assert result["count"] == 2
+                assert result["success"] is True
+                assert len(result["issues"]) == 2
+                assert result["query"] == "bug"
+                assert result["count"] == 2
 
 
 class TestMutationTools:
@@ -137,14 +150,13 @@ class TestMutationTools:
             }
         }
 
-        with patch(
-            "src.tools.mutations.execute_query", AsyncMock(return_value=mock_data)
-        ):
-            create_fn = mcp._tool_manager._tools["create_issue"].fn
-            result = await create_fn(team_id="team-1", title="New Issue")
+        with patch("src.tools.mutations.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.mutations.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("create_issue")
+                result = await tool.fn(make_ctx(), team_id="team-1", title="New Issue")
 
-            assert result["success"] is True
-            assert result["issue"]["identifier"] == "ENG-456"
+                assert result["success"] is True
+                assert result["issue"]["identifier"] == "ENG-456"
 
     @pytest.mark.asyncio
     async def test_create_issue_with_optional_fields(self, mcp: FastMCP):
@@ -159,19 +171,20 @@ class TestMutationTools:
         with patch(
             "src.tools.mutations.execute_query", AsyncMock(return_value=mock_data)
         ) as mock_query:
-            create_fn = mcp._tool_manager._tools["create_issue"].fn
-            await create_fn(
-                team_id="team-1",
-                title="New Issue",
-                description="A description",
-                priority=2,
-            )
+            with patch("src.tools.mutations.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("create_issue")
+                await tool.fn(
+                    make_ctx(),
+                    team_id="team-1",
+                    title="New Issue",
+                    description="A description",
+                    priority=2,
+                )
 
-            # Verify optional fields were passed
-            call_args = mock_query.call_args
-            variables = call_args[0][1]
-            assert variables["description"] == "A description"
-            assert variables["priority"] == 2
+                call_args = mock_query.call_args
+                variables = call_args[0][1]
+                assert variables["description"] == "A description"
+                assert variables["priority"] == 2
 
     @pytest.mark.asyncio
     async def test_update_issue_success(self, mcp: FastMCP):
@@ -187,14 +200,13 @@ class TestMutationTools:
             }
         }
 
-        with patch(
-            "src.tools.mutations.execute_query", AsyncMock(return_value=mock_data)
-        ):
-            update_fn = mcp._tool_manager._tools["update_issue"].fn
-            result = await update_fn(issue_id="123", title="Updated Title")
+        with patch("src.tools.mutations.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.mutations.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("update_issue")
+                result = await tool.fn(make_ctx(), issue_id="123", title="Updated Title")
 
-            assert result["success"] is True
-            assert result["issue"]["title"] == "Updated Title"
+                assert result["success"] is True
+                assert result["issue"]["title"] == "Updated Title"
 
     @pytest.mark.asyncio
     async def test_update_status_success(self, mcp: FastMCP):
@@ -210,14 +222,13 @@ class TestMutationTools:
             }
         }
 
-        with patch(
-            "src.tools.mutations.execute_query", AsyncMock(return_value=mock_data)
-        ):
-            status_fn = mcp._tool_manager._tools["update_status"].fn
-            result = await status_fn(issue_id="123", state_id="done-state")
+        with patch("src.tools.mutations.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.mutations.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("update_status")
+                result = await tool.fn(make_ctx(), issue_id="123", state_id="done-state")
 
-            assert result["success"] is True
-            assert result["issue"]["state"]["name"] == "Done"
+                assert result["success"] is True
+                assert result["issue"]["state"]["name"] == "Done"
 
 
 class TestStateTools:
@@ -248,12 +259,13 @@ class TestStateTools:
         }
 
         with patch("src.tools.states.execute_query", AsyncMock(return_value=mock_data)):
-            states_fn = mcp._tool_manager._tools["states"].fn
-            result = await states_fn(team_id="team-1")
+            with patch("src.tools.states.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("states")
+                result = await tool.fn(make_ctx(), team_id="team-1")
 
-            assert result["success"] is True
-            assert result["team"]["name"] == "Engineering"
-            assert len(result["states"]) == 3
+                assert result["success"] is True
+                assert result["team"]["name"] == "Engineering"
+                assert len(result["states"]) == 3
 
     @pytest.mark.asyncio
     async def test_states_returns_all_teams(self, mcp: FastMCP):
@@ -280,13 +292,14 @@ class TestStateTools:
         }
 
         with patch("src.tools.states.execute_query", AsyncMock(return_value=mock_data)):
-            states_fn = mcp._tool_manager._tools["states"].fn
-            result = await states_fn()
+            with patch("src.tools.states.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("states")
+                result = await tool.fn(make_ctx())
 
-            assert result["success"] is True
-            assert len(result["teams"]) == 2
-            assert result["teams"][0]["name"] == "Engineering"
-            assert result["teams"][1]["name"] == "Design"
+                assert result["success"] is True
+                assert len(result["teams"]) == 2
+                assert result["teams"][0]["name"] == "Engineering"
+                assert result["teams"][1]["name"] == "Design"
 
     @pytest.mark.asyncio
     async def test_states_handles_team_not_found(self, mcp: FastMCP):
@@ -294,8 +307,261 @@ class TestStateTools:
         mock_data = {"team": None}
 
         with patch("src.tools.states.execute_query", AsyncMock(return_value=mock_data)):
-            states_fn = mcp._tool_manager._tools["states"].fn
-            result = await states_fn(team_id="bad-team")
+            with patch("src.tools.states.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("states")
+                result = await tool.fn(make_ctx(), team_id="bad-team")
 
-            assert result["success"] is False
-            assert "not found" in result["error"]
+                assert result["success"] is False
+                assert "not found" in result["error"]
+
+
+class TestMilestoneTools:
+    """Tests for project milestone CRUD tools."""
+
+    @pytest.fixture
+    def mcp(self) -> FastMCP:
+        """Create a FastMCP instance with milestone tools registered."""
+        mcp = FastMCP("test")
+        register_milestone_tools(mcp)
+        return mcp
+
+    @pytest.mark.asyncio
+    async def test_list_milestones_returns_milestones(self, mcp: FastMCP):
+        """list_milestones should return project milestones with count."""
+        mock_data = {
+            "projectMilestones": {
+                "nodes": [
+                    {"id": "m1", "name": "Alpha", "targetDate": "2025-06-30"},
+                    {"id": "m2", "name": "Beta", "targetDate": "2025-09-30"},
+                ]
+            }
+        }
+
+        with patch("src.tools.milestones.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.milestones.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("list_milestones")
+                result = await tool.fn(make_ctx(), project_id="proj-1")
+
+                assert result["success"] is True
+                assert len(result["milestones"]) == 2
+                assert result["count"] == 2
+                assert result["milestones"][0]["name"] == "Alpha"
+
+    @pytest.mark.asyncio
+    async def test_list_milestones_returns_empty(self, mcp: FastMCP):
+        """list_milestones should return empty list when no milestones exist."""
+        mock_data = {"projectMilestones": {"nodes": []}}
+
+        with patch("src.tools.milestones.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.milestones.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("list_milestones")
+                result = await tool.fn(make_ctx(), project_id="proj-1")
+
+                assert result["success"] is True
+                assert result["milestones"] == []
+                assert result["count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_list_milestones_handles_error(self, mcp: FastMCP):
+        """list_milestones should return error on API failure."""
+        with patch(
+            "src.tools.milestones.execute_query",
+            AsyncMock(side_effect=LinearClientError("Network error")),
+        ):
+            with patch("src.tools.milestones.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("list_milestones")
+                result = await tool.fn(make_ctx(), project_id="proj-1")
+
+                assert result["success"] is False
+                assert "Network error" in result["error"]
+                assert result["isError"] is True
+
+    @pytest.mark.asyncio
+    async def test_get_milestone_returns_milestone(self, mcp: FastMCP):
+        """get_milestone should return milestone details."""
+        mock_data = {
+            "projectMilestone": {
+                "id": "m1",
+                "name": "Alpha",
+                "description": "First milestone",
+                "targetDate": "2025-06-30",
+                "project": {"id": "proj-1", "name": "My Project"},
+            }
+        }
+
+        with patch("src.tools.milestones.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.milestones.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("get_milestone")
+                result = await tool.fn(make_ctx(), milestone_id="m1")
+
+                assert result["success"] is True
+                assert result["milestone"]["name"] == "Alpha"
+                assert result["milestone"]["project"]["name"] == "My Project"
+
+    @pytest.mark.asyncio
+    async def test_get_milestone_handles_not_found(self, mcp: FastMCP):
+        """get_milestone should return error when milestone not found."""
+        mock_data = {"projectMilestone": None}
+
+        with patch("src.tools.milestones.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.milestones.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("get_milestone")
+                result = await tool.fn(make_ctx(), milestone_id="bad-id")
+
+                assert result["success"] is False
+                assert "not found" in result["error"]
+                assert result["isError"] is True
+
+    @pytest.mark.asyncio
+    async def test_create_milestone_success(self, mcp: FastMCP):
+        """create_milestone should create and return new milestone."""
+        mock_data = {
+            "projectMilestoneCreate": {
+                "success": True,
+                "projectMilestone": {
+                    "id": "m-new",
+                    "name": "v1.0 Launch",
+                    "description": None,
+                    "targetDate": "2025-12-31",
+                    "project": {"id": "proj-1", "name": "My Project"},
+                },
+            }
+        }
+
+        with patch("src.tools.milestones.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.milestones.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("create_milestone")
+                result = await tool.fn(
+                    make_ctx(),
+                    project_id="proj-1",
+                    name="v1.0 Launch",
+                    target_date="2025-12-31",
+                )
+
+                assert result["success"] is True
+                assert result["milestone"]["name"] == "v1.0 Launch"
+                assert result["milestone"]["id"] == "m-new"
+
+    @pytest.mark.asyncio
+    async def test_create_milestone_passes_optional_fields(self, mcp: FastMCP):
+        """create_milestone should pass description and target_date to API."""
+        mock_data = {
+            "projectMilestoneCreate": {
+                "success": True,
+                "projectMilestone": {"id": "m-new", "name": "M1"},
+            }
+        }
+
+        with patch(
+            "src.tools.milestones.execute_query", AsyncMock(return_value=mock_data)
+        ) as mock_query:
+            with patch("src.tools.milestones.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("create_milestone")
+                await tool.fn(
+                    make_ctx(),
+                    project_id="proj-1",
+                    name="M1",
+                    description="Key milestone",
+                    target_date="2025-06-30",
+                )
+
+                call_args = mock_query.call_args
+                variables = call_args[0][1]
+                assert variables["description"] == "Key milestone"
+                assert variables["targetDate"] == "2025-06-30"
+
+    @pytest.mark.asyncio
+    async def test_create_milestone_handles_api_failure(self, mcp: FastMCP):
+        """create_milestone should return error when API reports failure."""
+        mock_data = {"projectMilestoneCreate": {"success": False}}
+
+        with patch("src.tools.milestones.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.milestones.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("create_milestone")
+                result = await tool.fn(make_ctx(), project_id="proj-1", name="M1")
+
+                assert result["success"] is False
+                assert result["isError"] is True
+
+    @pytest.mark.asyncio
+    async def test_update_milestone_success(self, mcp: FastMCP):
+        """update_milestone should update and return milestone."""
+        mock_data = {
+            "projectMilestoneUpdate": {
+                "success": True,
+                "projectMilestone": {
+                    "id": "m1",
+                    "name": "Renamed Milestone",
+                    "targetDate": "2026-01-15",
+                    "project": {"id": "proj-1", "name": "My Project"},
+                },
+            }
+        }
+
+        with patch("src.tools.milestones.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.milestones.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("update_milestone")
+                result = await tool.fn(
+                    make_ctx(),
+                    milestone_id="m1",
+                    name="Renamed Milestone",
+                    target_date="2026-01-15",
+                )
+
+                assert result["success"] is True
+                assert result["milestone"]["name"] == "Renamed Milestone"
+
+    @pytest.mark.asyncio
+    async def test_update_milestone_handles_failure(self, mcp: FastMCP):
+        """update_milestone should return error when update fails."""
+        mock_data = {"projectMilestoneUpdate": {"success": False}}
+
+        with patch("src.tools.milestones.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.milestones.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("update_milestone")
+                result = await tool.fn(make_ctx(), milestone_id="m1", name="New Name")
+
+                assert result["success"] is False
+                assert result["isError"] is True
+
+    @pytest.mark.asyncio
+    async def test_delete_milestone_success(self, mcp: FastMCP):
+        """delete_milestone should delete and confirm success."""
+        mock_data = {"projectMilestoneDelete": {"success": True}}
+
+        with patch("src.tools.milestones.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.milestones.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("delete_milestone")
+                result = await tool.fn(make_ctx(), milestone_id="m1")
+
+                assert result["success"] is True
+                assert result["deleted"] is True
+                assert result["milestone_id"] == "m1"
+
+    @pytest.mark.asyncio
+    async def test_delete_milestone_handles_failure(self, mcp: FastMCP):
+        """delete_milestone should return error when deletion fails."""
+        mock_data = {"projectMilestoneDelete": {"success": False}}
+
+        with patch("src.tools.milestones.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.milestones.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("delete_milestone")
+                result = await tool.fn(make_ctx(), milestone_id="m1")
+
+                assert result["success"] is False
+                assert result["isError"] is True
+
+    @pytest.mark.asyncio
+    async def test_delete_milestone_handles_error(self, mcp: FastMCP):
+        """delete_milestone should return error on API failure."""
+        with patch(
+            "src.tools.milestones.execute_query",
+            AsyncMock(side_effect=LinearClientError("Permission denied")),
+        ):
+            with patch("src.tools.milestones.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("delete_milestone")
+                result = await tool.fn(make_ctx(), milestone_id="m1")
+
+                assert result["success"] is False
+                assert "Permission denied" in result["error"]
+                assert result["isError"] is True
