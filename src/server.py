@@ -11,6 +11,7 @@ from fastmcp import FastMCP
 
 from .auth import auth_provider
 from .tools.issues import register_issue_tools
+from .tools.milestones import register_milestone_tools
 from .tools.mutations import register_mutation_tools
 from .tools.states import register_state_tools
 
@@ -38,6 +39,7 @@ This server provides tools to:
 - Update issue details and workflow status
 - View available workflow states for teams
 - Post and view project status updates
+- Create, list, get, update, and delete project milestones
 
 Authentication is handled via Keycard OAuth.
 """,
@@ -47,6 +49,7 @@ Authentication is handled via Keycard OAuth.
     register_issue_tools(mcp)
     register_mutation_tools(mcp)
     register_state_tools(mcp)
+    register_milestone_tools(mcp)
 
     return mcp
 
