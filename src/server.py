@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from fastmcp import FastMCP
 
 from .auth import auth_provider
+from .tools.comments import register_comment_tools
 from .tools.issues import register_issue_tools
 from .tools.milestones import register_milestone_tools
 from .tools.mutations import register_mutation_tools
@@ -40,6 +41,7 @@ This server provides tools to:
 - View available workflow states for teams
 - Post and view project status updates
 - Create, list, get, update, and delete project milestones
+- List, post, edit, and delete comments on issues
 
 Authentication is handled via Keycard OAuth.
 """,
@@ -50,6 +52,7 @@ Authentication is handled via Keycard OAuth.
     register_mutation_tools(mcp)
     register_state_tools(mcp)
     register_milestone_tools(mcp)
+    register_comment_tools(mcp)
 
     return mcp
 
