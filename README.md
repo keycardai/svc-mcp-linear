@@ -35,6 +35,10 @@ Keycard handles OAuth token exchange. Each user authenticates through Keycard, a
 | `create_project` | Mutation | Create a new project (requires name and team_id) |
 | `create_project_update` | Mutation | Post a status update for a project |
 | `states` | Query | List available workflow states for a team |
+| `list_comments` | Query | List comments on an issue (oldest first) |
+| `create_comment` | Mutation | Post a comment on an issue (optionally a threaded reply via parent_id) |
+| `update_comment` | Mutation | Edit a comment body |
+| `delete_comment` | Mutation | Delete a comment (irreversible) |
 
 ### Tool Details
 

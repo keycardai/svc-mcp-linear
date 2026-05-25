@@ -8,6 +8,7 @@ import pytest
 from fastmcp import FastMCP
 
 from src.client import LinearClientError
+from src.tools.comments import register_comment_tools
 from src.tools.issues import register_issue_tools
 from src.tools.milestones import register_milestone_tools
 from src.tools.mutations import register_mutation_tools
@@ -564,4 +565,223 @@ class TestMilestoneTools:
 
                 assert result["success"] is False
                 assert "Permission denied" in result["error"]
+                assert result["isError"] is True
+
+
+class TestCommentTools:
+    """Tests for issue comment CRUD tools."""
+
+    @pytest.fixture
+    def mcp(self) -> FastMCP:
+        """Create a FastMCP instance with comment tools registered."""
+        mcp = FastMCP("test")
+        register_comment_tools(mcp)
+        return mcp
+
+    @pytest.mark.asyncio
+    async def test_list_comments_returns_comments(self, mcp: FastMCP):
+        """list_comments should return comments with count."""
+        mock_data = {
+            "issue": {
+                "comments": {
+                    "nodes": [
+                        {"id": "c1", "body": "first", "user": {"name": "Kiam"}},
+                        {"id": "c2", "body": "second", "user": {"name": "Larry"}},
+                    ]
+                }
+            }
+        }
+
+        with patch("src.tools.comments.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.comments.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("list_comments")
+                result = await tool.fn(make_ctx(), issue_id="iss-1")
+
+                assert result["success"] is True
+                assert len(result["comments"]) == 2
+                assert result["count"] == 2
+                assert result["comments"][0]["body"] == "first"
+
+    @pytest.mark.asyncio
+    async def test_list_comments_returns_empty(self, mcp: FastMCP):
+        """list_comments should return empty list when no comments exist."""
+        mock_data = {"issue": {"comments": {"nodes": []}}}
+
+        with patch("src.tools.comments.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.comments.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("list_comments")
+                result = await tool.fn(make_ctx(), issue_id="iss-1")
+
+                assert result["success"] is True
+                assert result["comments"] == []
+                assert result["count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_list_comments_handles_issue_not_found(self, mcp: FastMCP):
+        """list_comments should return error when the issue UUID is unknown."""
+        mock_data = {"issue": None}
+
+        with patch("src.tools.comments.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.comments.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("list_comments")
+                result = await tool.fn(make_ctx(), issue_id="bad-id")
+
+                assert result["success"] is False
+                assert "not found" in result["error"]
+                assert result["isError"] is True
+
+    @pytest.mark.asyncio
+    async def test_list_comments_handles_error(self, mcp: FastMCP):
+        """list_comments should return error on API failure."""
+        with patch(
+            "src.tools.comments.execute_query",
+            AsyncMock(side_effect=LinearClientError("Network down")),
+        ):
+            with patch("src.tools.comments.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("list_comments")
+                result = await tool.fn(make_ctx(), issue_id="iss-1")
+
+                assert result["success"] is False
+                assert "Network down" in result["error"]
+                assert result["isError"] is True
+
+    @pytest.mark.asyncio
+    async def test_create_comment_success(self, mcp: FastMCP):
+        """create_comment should create and return new comment."""
+        mock_data = {
+            "commentCreate": {
+                "success": True,
+                "comment": {
+                    "id": "c-new",
+                    "body": "Looks good",
+                    "url": "https://linear.app/foo/c/c-new",
+                    "user": {"name": "Kiam"},
+                },
+            }
+        }
+
+        with patch("src.tools.comments.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.comments.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("create_comment")
+                result = await tool.fn(make_ctx(), issue_id="iss-1", body="Looks good")
+
+                assert result["success"] is True
+                assert result["comment"]["body"] == "Looks good"
+                assert result["comment"]["id"] == "c-new"
+
+    @pytest.mark.asyncio
+    async def test_create_comment_passes_parent_id(self, mcp: FastMCP):
+        """create_comment should forward parent_id for threaded replies."""
+        mock_data = {
+            "commentCreate": {
+                "success": True,
+                "comment": {"id": "c-new", "body": "reply"},
+            }
+        }
+
+        with patch(
+            "src.tools.comments.execute_query", AsyncMock(return_value=mock_data)
+        ) as mock_query:
+            with patch("src.tools.comments.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("create_comment")
+                await tool.fn(
+                    make_ctx(),
+                    issue_id="iss-1",
+                    body="reply",
+                    parent_id="c-parent",
+                )
+
+                variables = mock_query.call_args[0][1]
+                assert variables["parentId"] == "c-parent"
+
+    @pytest.mark.asyncio
+    async def test_create_comment_handles_api_failure(self, mcp: FastMCP):
+        """create_comment should return error when API reports failure."""
+        mock_data = {"commentCreate": {"success": False}}
+
+        with patch("src.tools.comments.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.comments.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("create_comment")
+                result = await tool.fn(make_ctx(), issue_id="iss-1", body="hi")
+
+                assert result["success"] is False
+                assert result["isError"] is True
+
+    @pytest.mark.asyncio
+    async def test_create_comment_handles_error(self, mcp: FastMCP):
+        """create_comment should return error on client exception."""
+        with patch(
+            "src.tools.comments.execute_query",
+            AsyncMock(side_effect=LinearClientError("Forbidden")),
+        ):
+            with patch("src.tools.comments.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("create_comment")
+                result = await tool.fn(make_ctx(), issue_id="iss-1", body="hi")
+
+                assert result["success"] is False
+                assert "Forbidden" in result["error"]
+                assert result["isError"] is True
+
+    @pytest.mark.asyncio
+    async def test_update_comment_success(self, mcp: FastMCP):
+        """update_comment should edit and return updated comment."""
+        mock_data = {
+            "commentUpdate": {
+                "success": True,
+                "comment": {
+                    "id": "c1",
+                    "body": "edited body",
+                    "editedAt": "2026-05-22T12:00:00Z",
+                    "user": {"name": "Kiam"},
+                },
+            }
+        }
+
+        with patch("src.tools.comments.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.comments.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("update_comment")
+                result = await tool.fn(make_ctx(), comment_id="c1", body="edited body")
+
+                assert result["success"] is True
+                assert result["comment"]["body"] == "edited body"
+                assert result["comment"]["editedAt"] is not None
+
+    @pytest.mark.asyncio
+    async def test_update_comment_handles_error(self, mcp: FastMCP):
+        """update_comment should return error on client exception."""
+        with patch(
+            "src.tools.comments.execute_query",
+            AsyncMock(side_effect=LinearClientError("Comment not found")),
+        ):
+            with patch("src.tools.comments.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("update_comment")
+                result = await tool.fn(make_ctx(), comment_id="bad", body="x")
+
+                assert result["success"] is False
+                assert "Comment not found" in result["error"]
+                assert result["isError"] is True
+
+    @pytest.mark.asyncio
+    async def test_delete_comment_success(self, mcp: FastMCP):
+        """delete_comment should succeed."""
+        mock_data = {"commentDelete": {"success": True}}
+
+        with patch("src.tools.comments.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.comments.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("delete_comment")
+                result = await tool.fn(make_ctx(), comment_id="c1")
+
+                assert result["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_delete_comment_handles_failure(self, mcp: FastMCP):
+        """delete_comment should return error when API reports failure."""
+        mock_data = {"commentDelete": {"success": False}}
+
+        with patch("src.tools.comments.execute_query", AsyncMock(return_value=mock_data)):
+            with patch("src.tools.comments.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("delete_comment")
+                result = await tool.fn(make_ctx(), comment_id="c1")
+
+                assert result["success"] is False
                 assert result["isError"] is True
