@@ -10,8 +10,17 @@ from fastmcp import FastMCP
 from src.client import LinearClientError
 from src.tools.comments import register_comment_tools
 from src.tools.issues import register_issue_tools
-from src.tools.milestones import register_milestone_tools
-from src.tools.mutations import register_mutation_tools
+from src.tools.milestones import (
+    CREATE_MILESTONE_MUTATION,
+    LIST_MILESTONES_QUERY,
+    UPDATE_MILESTONE_MUTATION,
+    register_milestone_tools,
+)
+from src.tools.mutations import (
+    CREATE_ISSUE_MUTATION,
+    UPDATE_ISSUE_MUTATION,
+    register_mutation_tools,
+)
 from src.tools.states import register_state_tools
 
 
@@ -785,3 +794,76 @@ class TestCommentTools:
 
                 assert result["success"] is False
                 assert result["isError"] is True
+
+
+class TestGraphQLContracts:
+    """Static checks on GraphQL variable types.
+
+    The tool tests mock execute_query, so they cannot catch a wrong GraphQL
+    variable type (Linear rejects those at validation time, before execution).
+    These guard the specific type bugs that broke the milestone tools:
+    the project filter expects ID, and targetDate is a TimelessDate scalar.
+    """
+
+    def test_list_milestones_project_filter_is_id(self):
+        # `project: { id: { eq: $projectId } }` is an IDComparator; String fails.
+        assert "$projectId: ID!" in LIST_MILESTONES_QUERY
+
+    def test_milestone_target_date_is_timeless_date(self):
+        # Linear's projectMilestone targetDate is a TimelessDate, not String.
+        assert "$targetDate: TimelessDate" in CREATE_MILESTONE_MUTATION
+        assert "$targetDate: TimelessDate" in UPDATE_MILESTONE_MUTATION
+
+    def test_issue_mutations_support_milestone_and_parent(self):
+        for mutation in (CREATE_ISSUE_MUTATION, UPDATE_ISSUE_MUTATION):
+            assert "$projectMilestoneId: String" in mutation
+            assert "projectMilestoneId: $projectMilestoneId" in mutation
+            assert "$parentId: String" in mutation
+            assert "parentId: $parentId" in mutation
+
+
+class TestIssueLinkingParams:
+    """create_issue / update_issue pass through milestone and parent IDs."""
+
+    @pytest.fixture
+    def mcp(self) -> FastMCP:
+        mcp = FastMCP("test")
+        register_mutation_tools(mcp)
+        return mcp
+
+    @pytest.mark.asyncio
+    async def test_create_issue_passes_milestone_and_parent(self, mcp: FastMCP):
+        mock_data = {"issueCreate": {"success": True, "issue": {"id": "i1"}}}
+        with patch(
+            "src.tools.mutations.execute_query", AsyncMock(return_value=mock_data)
+        ) as mock_query:
+            with patch("src.tools.mutations.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("create_issue")
+                await tool.fn(
+                    make_ctx(),
+                    team_id="team-1",
+                    title="Sub-issue",
+                    project_milestone_id="ms-1",
+                    parent_id="parent-1",
+                )
+                variables = mock_query.call_args[0][1]
+                assert variables["projectMilestoneId"] == "ms-1"
+                assert variables["parentId"] == "parent-1"
+
+    @pytest.mark.asyncio
+    async def test_update_issue_passes_milestone_and_parent(self, mcp: FastMCP):
+        mock_data = {"issueUpdate": {"success": True, "issue": {"id": "i1"}}}
+        with patch(
+            "src.tools.mutations.execute_query", AsyncMock(return_value=mock_data)
+        ) as mock_query:
+            with patch("src.tools.mutations.get_linear_token", return_value="fake-token"):
+                tool = await mcp.get_tool("update_issue")
+                await tool.fn(
+                    make_ctx(),
+                    issue_id="i1",
+                    project_milestone_id="ms-2",
+                    parent_id="parent-2",
+                )
+                variables = mock_query.call_args[0][1]
+                assert variables["projectMilestoneId"] == "ms-2"
+                assert variables["parentId"] == "parent-2"
