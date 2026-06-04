@@ -9,55 +9,8 @@ import pytest
 from src.client import (
     LinearClientError,
     execute_query,
-    get_bearer_token,
     sanitize_variables,
 )
-
-
-class TestGetBearerToken:
-    """Tests for get_bearer_token function."""
-
-    def test_extracts_valid_bearer_token(self):
-        """Should extract token from valid Authorization header."""
-        mock_request = MagicMock()
-        mock_request.headers.get.return_value = "Bearer test_token_123"
-
-        with patch("src.client.get_http_request", return_value=mock_request):
-            token = get_bearer_token()
-            assert token == "test_token_123"
-
-    def test_extracts_token_case_insensitive(self):
-        """Should handle 'bearer' in any case."""
-        mock_request = MagicMock()
-        mock_request.headers.get.return_value = "bearer test_token_456"
-
-        with patch("src.client.get_http_request", return_value=mock_request):
-            token = get_bearer_token()
-            assert token == "test_token_456"
-
-    def test_raises_on_missing_header(self):
-        """Should raise ValueError when Authorization header is missing."""
-        mock_request = MagicMock()
-        mock_request.headers.get.return_value = ""
-
-        with patch("src.client.get_http_request", return_value=mock_request):
-            with pytest.raises(ValueError, match="Missing Authorization header"):
-                get_bearer_token()
-
-    def test_raises_on_invalid_format(self):
-        """Should raise ValueError when header format is invalid."""
-        mock_request = MagicMock()
-        mock_request.headers.get.return_value = "Basic abc123"
-
-        with patch("src.client.get_http_request", return_value=mock_request):
-            with pytest.raises(ValueError, match="Invalid Authorization header format"):
-                get_bearer_token()
-
-    def test_raises_on_no_active_request(self):
-        """Should raise ValueError when no active HTTP request."""
-        with patch("src.client.get_http_request", side_effect=RuntimeError("No request")):
-            with pytest.raises(ValueError, match="No active HTTP request"):
-                get_bearer_token()
 
 
 class TestSanitizeVariables:
@@ -101,7 +54,11 @@ class TestSanitizeVariables:
 
 
 class TestExecuteQuery:
-    """Tests for execute_query function."""
+    """Tests for execute_query function.
+
+    The token is passed explicitly by the caller (the tool resolves it from the
+    Keycard AccessContext); execute_query no longer extracts it from the request.
+    """
 
     @pytest.mark.asyncio
     async def test_successful_query(self):
@@ -110,13 +67,12 @@ class TestExecuteQuery:
         mock_response.status_code = 200
         mock_response.json.return_value = {"data": {"viewer": {"name": "Test User"}}}
 
-        with patch("src.client.get_bearer_token", return_value="test_token"):
-            with patch("httpx.AsyncClient") as mock_client:
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
-                )
-                result = await execute_query("query { viewer { name } }")
-                assert result == {"viewer": {"name": "Test User"}}
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
+            result = await execute_query("query { viewer { name } }", token="test_token")
+            assert result == {"viewer": {"name": "Test User"}}
 
     @pytest.mark.asyncio
     async def test_passes_variables(self):
@@ -125,23 +81,22 @@ class TestExecuteQuery:
         mock_response.status_code = 200
         mock_response.json.return_value = {"data": {"issue": {"title": "Test"}}}
 
-        with patch("src.client.get_bearer_token", return_value="test_token"):
-            with patch("httpx.AsyncClient") as mock_client:
-                mock_post = AsyncMock(return_value=mock_response)
-                mock_client.return_value.__aenter__.return_value.post = mock_post
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.post = mock_post
 
-                await execute_query(
-                    "query($id: String!) { issue(id: $id) { title } }",
-                    {"id": "ENG-123"},
-                )
+            await execute_query(
+                "query($id: String!) { issue(id: $id) { title } }",
+                {"id": "ENG-123"},
+                token="test_token",
+            )
 
-                # Verify variables were passed
-                call_args = mock_post.call_args
-                assert call_args.kwargs["json"]["variables"] == {"id": "ENG-123"}
+            call_args = mock_post.call_args
+            assert call_args.kwargs["json"]["variables"] == {"id": "ENG-123"}
 
     @pytest.mark.asyncio
-    async def test_uses_token_override(self):
-        """Should use provided token instead of extracting from request."""
+    async def test_uses_provided_token(self):
+        """Should send the provided token as a Bearer Authorization header."""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"data": {}}
@@ -152,7 +107,6 @@ class TestExecuteQuery:
 
             await execute_query("query { viewer { id } }", token="override_token")
 
-            # Verify override token was used
             call_args = mock_post.call_args
             assert call_args.kwargs["headers"]["Authorization"] == "Bearer override_token"
 
@@ -163,13 +117,14 @@ class TestExecuteQuery:
         mock_response.status_code = 200
         mock_response.json.return_value = {"errors": [{"message": "Issue not found"}]}
 
-        with patch("src.client.get_bearer_token", return_value="test_token"):
-            with patch("httpx.AsyncClient") as mock_client:
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
+            with pytest.raises(LinearClientError, match="Issue not found"):
+                await execute_query(
+                    'query { issue(id: "bad") { title } }', token="test_token"
                 )
-                with pytest.raises(LinearClientError, match="Issue not found"):
-                    await execute_query("query { issue(id: \"bad\") { title } }")
 
     @pytest.mark.asyncio
     async def test_handles_http_errors(self):
@@ -178,13 +133,12 @@ class TestExecuteQuery:
         mock_response.status_code = 401
         mock_response.text = "Unauthorized"
 
-        with patch("src.client.get_bearer_token", return_value="test_token"):
-            with patch("httpx.AsyncClient") as mock_client:
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
-                )
-                with pytest.raises(LinearClientError, match="HTTP 401"):
-                    await execute_query("query { viewer { id } }")
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
+            with pytest.raises(LinearClientError, match="HTTP 401"):
+                await execute_query("query { viewer { id } }", token="test_token")
 
     @pytest.mark.asyncio
     async def test_sanitizes_variables(self):
@@ -193,19 +147,18 @@ class TestExecuteQuery:
         mock_response.status_code = 200
         mock_response.json.return_value = {"data": {}}
 
-        with patch("src.client.get_bearer_token", return_value="test_token"):
-            with patch("httpx.AsyncClient") as mock_client:
-                mock_post = AsyncMock(return_value=mock_response)
-                mock_client.return_value.__aenter__.return_value.post = mock_post
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.post = mock_post
 
-                await execute_query(
-                    "mutation { ... }",
-                    {"teamId": "team-1", "title": "Test", "description": None},
-                )
+            await execute_query(
+                "mutation { placeholder }",
+                {"teamId": "team-1", "title": "Test", "description": None},
+                token="test_token",
+            )
 
-                call_args = mock_post.call_args
-                # None value should be removed
-                assert call_args.kwargs["json"]["variables"] == {
-                    "teamId": "team-1",
-                    "title": "Test",
-                }
+            call_args = mock_post.call_args
+            assert call_args.kwargs["json"]["variables"] == {
+                "teamId": "team-1",
+                "title": "Test",
+            }

@@ -10,7 +10,7 @@ from ..client import LinearClientError, execute_query
 
 # GraphQL Queries
 LIST_MILESTONES_QUERY = """
-query($projectId: String!, $first: Int!) {
+query($projectId: ID!, $first: Int!) {
     projectMilestones(filter: { project: { id: { eq: $projectId } } }, first: $first) {
         nodes {
             id
@@ -45,7 +45,7 @@ query($id: String!) {
 
 # GraphQL Mutations
 CREATE_MILESTONE_MUTATION = """
-mutation($projectId: String!, $name: String!, $description: String, $targetDate: String) {
+mutation($projectId: String!, $name: String!, $description: String, $targetDate: TimelessDate) {
     projectMilestoneCreate(input: {
         projectId: $projectId
         name: $name
@@ -66,7 +66,7 @@ mutation($projectId: String!, $name: String!, $description: String, $targetDate:
 """
 
 UPDATE_MILESTONE_MUTATION = """
-mutation($id: String!, $name: String, $description: String, $targetDate: String) {
+mutation($id: String!, $name: String, $description: String, $targetDate: TimelessDate) {
     projectMilestoneUpdate(id: $id, input: {
         name: $name
         description: $description

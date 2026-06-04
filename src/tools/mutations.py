@@ -10,7 +10,7 @@ from ..client import LinearClientError, execute_query
 
 # GraphQL Mutations
 CREATE_ISSUE_MUTATION = """
-mutation($teamId: String!, $title: String!, $description: String, $priority: Int, $stateId: String, $assigneeId: String, $projectId: String) {
+mutation($teamId: String!, $title: String!, $description: String, $priority: Int, $stateId: String, $assigneeId: String, $projectId: String, $projectMilestoneId: String, $parentId: String) {
     issueCreate(input: {
         teamId: $teamId
         title: $title
@@ -19,6 +19,8 @@ mutation($teamId: String!, $title: String!, $description: String, $priority: Int
         stateId: $stateId
         assigneeId: $assigneeId
         projectId: $projectId
+        projectMilestoneId: $projectMilestoneId
+        parentId: $parentId
     }) {
         success
         issue {
@@ -29,13 +31,15 @@ mutation($teamId: String!, $title: String!, $description: String, $priority: Int
             state { name }
             assignee { name }
             project { id name }
+            projectMilestone { id name }
+            parent { id identifier }
         }
     }
 }
 """
 
 UPDATE_ISSUE_MUTATION = """
-mutation($id: String!, $title: String, $description: String, $priority: Int, $stateId: String, $assigneeId: String, $teamId: String, $projectId: String) {
+mutation($id: String!, $title: String, $description: String, $priority: Int, $stateId: String, $assigneeId: String, $teamId: String, $projectId: String, $projectMilestoneId: String, $parentId: String) {
     issueUpdate(id: $id, input: {
         title: $title
         description: $description
@@ -44,6 +48,8 @@ mutation($id: String!, $title: String, $description: String, $priority: Int, $st
         assigneeId: $assigneeId
         teamId: $teamId
         projectId: $projectId
+        projectMilestoneId: $projectMilestoneId
+        parentId: $parentId
     }) {
         success
         issue {
@@ -55,6 +61,8 @@ mutation($id: String!, $title: String, $description: String, $priority: Int, $st
             assignee { name }
             team { id name }
             project { id name }
+            projectMilestone { id name }
+            parent { id identifier }
         }
     }
 }
@@ -118,7 +126,7 @@ def register_mutation_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(
         name="create_issue",
-        description="Create a new Linear issue. Requires team_id and title. Optional: description, priority (0=none, 1=urgent, 2=high, 3=medium, 4=low), state_id, assignee_id, project_id.",
+        description="Create a new Linear issue. Requires team_id and title. Optional: description, priority (0=none, 1=urgent, 2=high, 3=medium, 4=low), state_id, assignee_id, project_id, project_milestone_id (attach to a project milestone), parent_id (make this a sub-issue of parent_id).",
     )
     @auth_provider.grant(LINEAR_API_URL)
     async def create_issue(
@@ -130,6 +138,8 @@ def register_mutation_tools(mcp: FastMCP) -> None:
         state_id: str | None = None,
         assignee_id: str | None = None,
         project_id: str | None = None,
+        project_milestone_id: str | None = None,
+        parent_id: str | None = None,
     ) -> dict:
         """Create a new Linear issue.
 
@@ -141,6 +151,9 @@ def register_mutation_tools(mcp: FastMCP) -> None:
             state_id: Optional workflow state ID (get from states tool).
             assignee_id: Optional assignee user ID.
             project_id: Optional project ID to assign issue to (get from list_projects tool).
+            project_milestone_id: Optional project milestone UUID to attach the issue to
+                (get from list_milestones). The issue must be in the milestone's project.
+            parent_id: Optional parent issue UUID; makes this a sub-issue of that parent.
         """
         try:
             access_ctx = await ctx.get_state("keycardai")
@@ -154,6 +167,8 @@ def register_mutation_tools(mcp: FastMCP) -> None:
                 "stateId": state_id,
                 "assigneeId": assignee_id,
                 "projectId": project_id,
+                "projectMilestoneId": project_milestone_id,
+                "parentId": parent_id,
             }
             data = await execute_query(CREATE_ISSUE_MUTATION, variables, token=token)
             result = data.get("issueCreate", {})
@@ -167,7 +182,7 @@ def register_mutation_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(
         name="update_issue",
-        description="Update an existing Linear issue. Requires issue_id (internal UUID from issue query). Optional: title, description, priority, state_id, assignee_id, team_id (moves issue to a different team), project_id (assigns/moves to a project; pass empty string to unassign).",
+        description="Update an existing Linear issue. Requires issue_id (internal UUID from issue query). Optional: title, description, priority, state_id, assignee_id, team_id (moves issue to a different team), project_id (assigns/moves to a project; pass empty string to unassign), project_milestone_id (attach to a project milestone), parent_id (make this a sub-issue of parent_id).",
     )
     @auth_provider.grant(LINEAR_API_URL)
     async def update_issue(
@@ -180,6 +195,8 @@ def register_mutation_tools(mcp: FastMCP) -> None:
         assignee_id: str | None = None,
         team_id: str | None = None,
         project_id: str | None = None,
+        project_milestone_id: str | None = None,
+        parent_id: str | None = None,
     ) -> dict:
         """Update an existing Linear issue.
 
@@ -196,6 +213,9 @@ def register_mutation_tools(mcp: FastMCP) -> None:
                 (from the target team) and/or project_id.
             project_id: Optional project UUID to assign the issue to. Pass an empty string
                 to unassign the issue from its current project.
+            project_milestone_id: Optional project milestone UUID to attach the issue to
+                (get from list_milestones). The issue must be in the milestone's project.
+            parent_id: Optional parent issue UUID; makes this a sub-issue of that parent.
         """
         try:
             access_ctx = await ctx.get_state("keycardai")
@@ -210,6 +230,8 @@ def register_mutation_tools(mcp: FastMCP) -> None:
                 "assigneeId": assignee_id,
                 "teamId": team_id,
                 "projectId": project_id,
+                "projectMilestoneId": project_milestone_id,
+                "parentId": parent_id,
             }
             data = await execute_query(UPDATE_ISSUE_MUTATION, variables, token=token)
             result = data.get("issueUpdate", {})
