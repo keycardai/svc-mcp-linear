@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12"
 
 [[package]]
@@ -770,6 +770,23 @@ wheels = [
 ]
 
 [[package]]
+name = "keycardai-fastmcp"
+version = "0.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fastmcp" },
+    { name = "httpx" },
+    { name = "keycardai-mcp" },
+    { name = "keycardai-oauth" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6f/02/a553c10f2f0a3e5db79e5d2efcd3a26065cdbf1f4ade49e4e64de51dca27/keycardai_fastmcp-0.5.0.tar.gz", hash = "sha256:8af5fce5de2ed84cda3f635ab05fdaaffe8ba043d0400c074b3beb00660c546b", size = 40102, upload-time = "2026-07-21T22:49:04.251Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d1/18/47a864092f25dad7cb8f8c56feebd52593e51839fb7d19681a5ba0a5cdc3/keycardai_fastmcp-0.5.0-py3-none-any.whl", hash = "sha256:0ec1059987bd68ef6530c502b6e1b18aac9e96385b3d251281a27f43af4a6896", size = 19935, upload-time = "2026-07-21T22:49:03.121Z" },
+]
+
+[[package]]
 name = "keycardai-mcp"
 version = "0.21.0"
 source = { registry = "https://pypi.org/simple" }
@@ -786,23 +803,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/25/26/857cac57788079e2a85d96d5435346ca173fb5a46eba2643153cb1aea2bf/keycardai_mcp-0.21.0.tar.gz", hash = "sha256:75549e8b55bd688ec4f0ab558244d345a6dca59bc962e55dcfab587997759692", size = 230504, upload-time = "2026-03-06T16:29:53.324Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a9/85/a4e596651d45167c02e570292f33434883a358eb4008a665357ad0676187/keycardai_mcp-0.21.0-py3-none-any.whl", hash = "sha256:6e1027117acaa67ce80095e41127e8dd1e1263758641c4f2798c62356024ccf9", size = 158478, upload-time = "2026-03-06T16:29:54.704Z" },
-]
-
-[[package]]
-name = "keycardai-mcp-fastmcp"
-version = "0.20.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "fastmcp" },
-    { name = "httpx" },
-    { name = "keycardai-mcp" },
-    { name = "keycardai-oauth" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/78/68/d8b402a3e2dc6207c0034e50129664d2b5abbe57b9c6852827b92973fe0f/keycardai_mcp_fastmcp-0.20.0.tar.gz", hash = "sha256:6b135ef62671b996bb9f6a017af73e908cffdc961887b0f2c4dc7f2b70b7fc30", size = 186047, upload-time = "2026-04-01T20:23:17.023Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ee/c8/ac4f06e8757489a02e12330d17de6d2d58230fe31891b2f82f8cba275a2e/keycardai_mcp_fastmcp-0.20.0-py3-none-any.whl", hash = "sha256:228a527d3835858428728a409bc13697917f2a007ea34fad04733469e8d178fe", size = 20353, upload-time = "2026-04-01T20:23:18.035Z" },
 ]
 
 [[package]]
@@ -1616,7 +1616,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
     { name = "httpx" },
-    { name = "keycardai-mcp-fastmcp" },
+    { name = "keycardai-fastmcp" },
     { name = "python-dotenv" },
 ]
 
@@ -1630,7 +1630,7 @@ dev = [
 requires-dist = [
     { name = "fastmcp", specifier = ">=3.0.0" },
     { name = "httpx", specifier = ">=0.27.2" },
-    { name = "keycardai-mcp-fastmcp" },
+    { name = "keycardai-fastmcp" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
 ]
 

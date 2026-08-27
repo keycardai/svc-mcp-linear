@@ -8,10 +8,10 @@ import os
 from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
-from keycardai.mcp.integrations.fastmcp import AuthProvider, ClientSecret
+from keycardai.fastmcp import AuthProvider, ClientSecret
 
 if TYPE_CHECKING:
-    from keycardai.mcp.integrations.fastmcp import AccessContext
+    from keycardai.fastmcp import AccessContext
 
 # Load environment variables
 load_dotenv()
