@@ -16,9 +16,8 @@ _sdk_stub.ClientSecret.return_value = MagicMock()
 
 for _mod in [
     "keycardai",
+    "keycardai.fastmcp",
     "keycardai.mcp",
-    "keycardai.mcp.integrations",
-    "keycardai.mcp.integrations.fastmcp",
     "keycardai.mcp.server",
     "keycardai.mcp.server.auth",
     "keycardai.mcp.server.auth.application_credentials",
